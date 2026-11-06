@@ -17,6 +17,8 @@ Source: Woolford's replication package, https://github.com/felixwoolford/compact
 | A, planted facts | 18 synthetic debugging sessions made by the package's own generator (scenario `s1.json`, seed 5101). Each has 17 planted facts and 3 lures: 306 facts and 54 lures. | The study's first compaction point: the plant phase and round 1. | 18 |
 | B, commitments | 18 real public Pi coding agent sessions from MIT licensed sources, verified by SHA-256. 29 commitment probes, of which the study scores 27. | The end of the session. The probe message comes after it. | 18 |
 
+![Rendered session length of the 36 items by set, against the arena limit of 122,880 tokens](results/charts/dataset.png)
+
 What happened when the cuts became arena items:
 
 - **Nothing was dropped.** The rendered sessions are 38,914 to 109,268 tokens (median 66,490). The limit is 122,880.
@@ -64,6 +66,8 @@ M1, M2 and M3 are archived at `microtensor-io/ctx_compress-e7528c49`, `microtens
 
 ## Results so far
 
+![Pass rate with Wilson intervals, recall of key facts and share of summaries that kept all nine headings](results/charts/quality.png)
+
 36 items per contestant. Full table: `results/summary.csv`. One row per contestant and item, with the summary text and every metric: `results/raw.jsonl`.
 
 | | M1 (UID 2) | M2 (UID 13) | M3 (UID 14) | B0 (base) |
@@ -85,12 +89,18 @@ M1, M2 and M3 are archived at `microtensor-io/ctx_compress-e7528c49`, `microtens
 
 Where the items went, out of 36:
 
+![Passed, right format but under 0.60, and failed a format gate, per model](results/charts/failures.png)
+
 | | Passed | Right format, score under 0.60 | Failed a format gate |
 |---|---|---|---|
 | M1 (UID 2) | 5 | 1 | 30 |
 | M2 (UID 13) | 5 | 2 | 29 |
 | M3 (UID 14) | 3 | 17 | 16 |
 | B0 (base) | 0 | 12 | 24 |
+
+How long each summary ran. Each dot is one summary and hollow dots are missing headings:
+
+![Output tokens of every summary per model, with the 3,072 token limit marked](results/charts/output_length.png)
 
 Reading it:
 
@@ -127,7 +137,9 @@ Reading it:
 | `results/comparison.json` | The document the Models page reads |
 | `results/hand_check.md` | The ten summaries for the hand check |
 
-`results/chart.png` is not included yet. It will be drawn when the frontier contestants have run, since a chart of four nearby points says little.
+| `results/charts/` | `dataset.png`, `quality.png`, `failures.png`, `output_length.png`, drawn by `python -m comparisons.charts` |
+
+The chart of quality against cost per compaction is not included yet. It will be drawn when the frontier contestants have run, since four nearby points say little on their own.
 
 ## Rerun
 

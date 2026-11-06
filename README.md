@@ -21,12 +21,22 @@ Four models summarised 36 coding agent sessions on one RTX 4090. A summary passe
 | UID 14 (fine tuned) | 3 of 36 | 8.3% | 2.9% | 20 of 36 | 33% | 3.0% | 13.6 s |
 | Granite 4.0 H Micro (base) | 0 of 36 | 0% | 0% | 12 of 36 | 27% | 7.3% | 11.6 s |
 
+![Pass rate, recall of key facts and share of summaries that kept all nine headings, for each model](ctx_compress/exp1/results/charts/quality.png)
+
 In plain terms:
 
 - The fine tuned models do not carry their arena results over to this dataset. UID 2 passed 25 of 25 hidden arena items and passes 5 of 36 here.
 - The failure is mostly format. On these sessions the two strongest models often repeat one phrase until they reach the 3,072 token limit and never write the later headings. 30 and 29 of their 36 summaries fail for that reason alone. When UID 2 does finish, 5 of its 6 complete summaries pass.
 - Fine tuning still helped. Against the base model, recall rose from 27% to 47% and invented identifiers fell from 7.3% to 1.8%.
 - The comparison with frontier models is not in yet. Those contestants are defined and their jobs are built, but they have not been run.
+
+Where each model's 36 items ended up:
+
+![Items passed, items with the right format but a score under 0.60, and items that failed a format gate, for each model](ctx_compress/exp1/results/charts/failures.png)
+
+The length of every summary shows the cause. Each dot is one summary; hollow dots are missing headings. The pile at the right edge is summaries that ran into the output limit:
+
+![Output tokens of every summary for each model, with the 3,072 token limit marked](ctx_compress/exp1/results/charts/output_length.png)
 
 ## How an experiment works
 
@@ -43,8 +53,8 @@ In plain terms:
 |---|---|
 | `ctx_compress/exp1/README.md` | The run report: dataset, contestants, settings, results, limits |
 | `ctx_compress/exp1/data/` | The 36 items in the arena format, with the attached probes |
-| `ctx_compress/exp1/results/` | Every summary, every grade, the tables, and the document the site reads |
-| `comparisons/` | The code: build items, run models, grade, build reader and judge jobs, analyse |
+| `ctx_compress/exp1/results/` | Every summary, every grade, the tables, the charts, and the document the site reads |
+| `comparisons/` | The code: build items, run models, grade, build reader and judge jobs, analyse, draw charts |
 | `tools/` | Two small scripts that fetch and generate the source sessions |
 | `docs/reproduce.md` | Step by step instructions to rerun everything |
 | `docs/how-we-ran-it.md` | The machines, images, commands and costs of our own run |

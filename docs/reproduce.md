@@ -168,8 +168,9 @@ We have not run this step yet, so it is the least tested part of the repository.
 ```bash
 python -m comparisons.analyse --package sources/compaction-study-replication
 python -m comparisons.document --public
+python -m comparisons.charts
 ```
 
-`analyse` writes `raw.jsonl`, `summary.csv`, `tests.csv`, `chart.png`, `hand_check.md` and `analysis.json` into `ctx_compress/exp1/results/`. It works with whatever has been run so far and marks the rest as not run. `document` writes `comparison.json`, the document the Models page reads.
+`analyse` writes `raw.jsonl`, `summary.csv`, `tests.csv`, `chart.png`, `hand_check.md` and `analysis.json` into `ctx_compress/exp1/results/`. It works with whatever has been run so far and marks the rest as not run. `document` writes `comparison.json`, the document the Models page reads. `charts` draws the four charts in `results/charts/` from those files.
 
 With only the local models run, `summary.csv` must match the one in this repository.
