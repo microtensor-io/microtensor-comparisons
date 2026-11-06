@@ -136,7 +136,6 @@ Reading it:
 | `results/tests.csv` | McNemar tests (empty until frontier runs) |
 | `results/comparison.json` | The document the Models page reads |
 | `results/hand_check.md` | The ten summaries for the hand check |
-
 | `results/charts/` | `dataset.png`, `quality.png`, `failures.png`, `output_length.png`, drawn by `python -m comparisons.charts` |
 
 The chart of quality against cost per compaction is not included yet. It will be drawn when the frontier contestants have run, since four nearby points say little on their own.
