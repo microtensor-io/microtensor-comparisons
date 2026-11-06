@@ -1,0 +1,6 @@
+*.jsonl -text
+*.json -text
+*.csv -text
+*.md text eol=lf
+*.py text eol=lf
+*.txt text eol=lf
