@@ -50,7 +50,7 @@ Not run. The jobs for the four frontier summarisers were built (144 calls). Smal
 | RTX 4090, about 65 minutes at 0.89 USD an hour | about 0.97 USD |
 | Frontier calls | 0 USD (not run; estimate about 95 USD) |
 
-Cost per compaction in the results is the card's hourly price times the measured time of that call. For the three Microtensor models the tables also show that figure plus the 0.005 USD selling price of a request.
+Cost per compaction in the results is the card's hourly price times the measured time of that call. For the three Microtensor models the tables also show that figure plus the 0.001 USD selling price of a request.
 
 ## Things that went wrong
 

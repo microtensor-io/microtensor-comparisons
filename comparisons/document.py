@@ -162,7 +162,7 @@ def build(args: argparse.Namespace) -> dict[str, Any]:
             "budget; the others score zero whatever it would be.",
             "33 of the 306 planted facts sit only in the agent's thinking blocks, which the "
             "canonical rendering does not carry, so 273 is the most a contestant can recall.",
-            "Cost for the miner models is 4090 time at the pod's hourly price plus the 0.005 "
+            "Cost for the miner models is 4090 time at the pod's hourly price plus the 0.001 "
             "USD selling price; the base model is 4090 time only.",
         ],
         "source": {

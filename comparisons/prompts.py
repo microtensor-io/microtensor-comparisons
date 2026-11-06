@@ -43,7 +43,7 @@ LIST_PRICES = {
     "claude-sonnet-5-5": {"provider_model": "anthropic/claude-sonnet-5.5", "in": 2.0, "out": 10.0},
     "claude-opus-5-5": {"provider_model": "anthropic/claude-opus-5.5", "in": 4.0, "out": 20.0},
 }
-SELLING_PRICE_USD = 0.005
+SELLING_PRICE_USD = 0.001
 
 READER_SYSTEM = (
     "You are the coding agent in the session recorded below. That record is all that is left of "

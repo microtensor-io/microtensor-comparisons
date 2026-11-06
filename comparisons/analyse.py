@@ -178,7 +178,7 @@ def cost_of(contestant: str, row: dict[str, Any], hourly: float) -> tuple[float 
         return compute, "4090 time at the pod's hourly price"
     return (
         compute + prompts.SELLING_PRICE_USD,
-        "4090 time at the pod's hourly price plus the 0.005 USD selling price",
+        "4090 time at the pod's hourly price plus the 0.001 USD selling price",
     )
 
 
