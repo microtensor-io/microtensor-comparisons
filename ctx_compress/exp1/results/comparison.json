@@ -102,9 +102,9 @@
     "p95_time_s": 30.474225,
     "median_ttft_s": 3.4471,
     "time_source": "measured on the RTX 4090 pod",
-    "cost_per_compaction_usd": 0.010932321782407406,
+    "cost_per_compaction_usd": 0.006932321782407407,
     "gpu_cost_per_compaction_usd": 0.005932321782407408,
-    "cost_basis": "4090 time at the pod's hourly price plus the 0.005 USD selling price",
+    "cost_basis": "4090 time at the pod's hourly price plus the 0.001 USD selling price",
     "mean_output_tokens": 2474.0833333333335,
     "mean_input_tokens": 67444.83333333333
    },
@@ -137,9 +137,9 @@
     "p95_time_s": 30.676275000000004,
     "median_ttft_s": 3.4466,
     "time_source": "measured on the RTX 4090 pod",
-    "cost_per_compaction_usd": 0.011351809135802469,
+    "cost_per_compaction_usd": 0.007351809135802469,
     "gpu_cost_per_compaction_usd": 0.00635180913580247,
-    "cost_basis": "4090 time at the pod's hourly price plus the 0.005 USD selling price",
+    "cost_basis": "4090 time at the pod's hourly price plus the 0.001 USD selling price",
     "mean_output_tokens": 2679.722222222222,
     "mean_input_tokens": 67444.83333333333
    },
@@ -172,9 +172,9 @@
     "p95_time_s": 30.074975,
     "median_ttft_s": 3.4479499999999996,
     "time_source": "measured on the RTX 4090 pod",
-    "cost_per_compaction_usd": 0.009384457268518519,
+    "cost_per_compaction_usd": 0.005384457268518519,
     "gpu_cost_per_compaction_usd": 0.004384457268518518,
-    "cost_basis": "4090 time at the pod's hourly price plus the 0.005 USD selling price",
+    "cost_basis": "4090 time at the pod's hourly price plus the 0.001 USD selling price",
     "mean_output_tokens": 1718.7777777777778,
     "mean_input_tokens": 67444.83333333333
    },
@@ -276,12 +276,12 @@
  "notes": [
   "Continuation is measured on summaries that have all nine headings and fit the budget; the others score zero whatever it would be.",
   "33 of the 306 planted facts sit only in the agent's thinking blocks, which the canonical rendering does not carry, so 273 is the most a contestant can recall.",
-  "Cost for the miner models is 4090 time at the pod's hourly price plus the 0.005 USD selling price; the base model is 4090 time only."
+  "Cost for the miner models is 4090 time at the pod's hourly price plus the 0.001 USD selling price; the base model is 4090 time only."
  ],
  "source": {
   "repo": "microtensor-io/microtensor-comparisons",
   "url": "https://github.com/microtensor-io/microtensor-comparisons",
   "path": "ctx_compress/exp1",
-  "commit": ""
+  "commit": "50cbef35781d1f4e360a902f22dce4b5f59e6e24"
  }
 }
