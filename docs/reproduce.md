@@ -167,7 +167,7 @@ We have not run this step yet, so it is the least tested part of the repository.
 
 ```bash
 python -m comparisons.analyse --package sources/compaction-study-replication
-python -m comparisons.document --public
+python -m comparisons.document --public --link
 python -m comparisons.charts
 ```
 

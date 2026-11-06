@@ -70,7 +70,9 @@ def _commit() -> str:
 def build(args: argparse.Namespace) -> dict[str, Any]:
     out = Path(args.out)
     analysis = json.loads((out / "analysis.json").read_text(encoding="utf-8"))
-    report = json.loads((Path(args.items).parent / "report.json").read_text(encoding="utf-8"))
+    report = json.loads(
+        (Path(args.items).parent / "report.json").read_text(encoding="utf-8")
+    )
     raw = read_rows(out / "raw.jsonl")
     work = out / "work"
     weights = {}
@@ -167,7 +169,11 @@ def build(args: argparse.Namespace) -> dict[str, Any]:
         ],
         "source": {
             "repo": "microtensor-io/microtensor-comparisons",
-            "url": "https://github.com/microtensor-io/microtensor-comparisons",
+            **(
+                {"url": "https://github.com/microtensor-io/microtensor-comparisons"}
+                if args.link
+                else {}
+            ),
             "path": "ctx_compress/exp1",
             "commit": _commit(),
         },
@@ -180,6 +186,7 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--out", default="ctx_compress/exp1/results")
     parser.add_argument("--public", action="store_true")
     parser.add_argument("--rows", action="store_true")
+    parser.add_argument("--link", action="store_true")
     parser.add_argument("--date", default="2026-11-06")
     args = parser.parse_args(argv)
     body = build(args)
