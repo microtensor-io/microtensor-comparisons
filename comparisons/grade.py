@@ -31,7 +31,11 @@ SCORED_FIRST = os.environ.get("SCORED_ONLY", "1") == "1"
 def rows_of(path: Path) -> list[dict[str, Any]]:
     if not path.is_file():
         return []
-    return [json.loads(line) for line in path.read_text(encoding="utf-8").splitlines() if line]
+    return [
+        json.loads(line)
+        for line in path.read_text(encoding="utf-8").splitlines()
+        if line
+    ]
 
 
 def grade_one(
@@ -68,7 +72,9 @@ def grade_one(
         "facts_total": len(label["facts"]),
         "hallucination": compress.hallucination(text, str(task["user"])),
         "identifiers": len(compress.identifiers(text)),
-        "continuation": None if skipped else (sum(scores) / len(probes) if probes else 1.0),
+        "continuation": None
+        if skipped
+        else (sum(scores) / len(probes) if probes else 1.0),
         "probe_skipped": skipped,
         "probe_answers": answers,
         "probe_scores": scores,
@@ -106,7 +112,9 @@ def main() -> int:
         str(probe_judge.LLAMA_CACHE_REUSE),
     ]
     (HOME / "probe_server.json").write_text(
-        json.dumps({"image": image, "model_dir": str(model_file.parent), "command": command}),
+        json.dumps(
+            {"image": image, "model_dir": str(model_file.parent), "command": command}
+        ),
         encoding="utf-8",
     )
     if wanted == ["prepare"]:
@@ -139,7 +147,11 @@ def main() -> int:
         json.dumps(
             {
                 "subnet_version": getattr(microtensor_subnet, "__version__", ""),
-                "probe": {"model": spec.model, "revision": spec.revision, "file": spec.file},
+                "probe": {
+                    "model": spec.model,
+                    "revision": spec.revision,
+                    "file": spec.file,
+                },
                 "probe_image": image,
                 "probe_threads": THREADS,
                 "probe_command": command,
@@ -154,7 +166,11 @@ def main() -> int:
         for contestant in wanted:
             out = HOME / "graded" / f"{contestant}.jsonl"
             out.parent.mkdir(parents=True, exist_ok=True)
-            kept = [row for row in rows_of(out) if SCORED_FIRST or not row.get("probe_skipped")]
+            kept = [
+                row
+                for row in rows_of(out)
+                if SCORED_FIRST or not row.get("probe_skipped")
+            ]
             with out.open("w", encoding="utf-8") as handle:
                 for row in kept:
                     handle.write(json.dumps(row, ensure_ascii=False) + "\n")
@@ -164,7 +180,10 @@ def main() -> int:
                     continue
                 started = time.monotonic()
                 found = grade_one(
-                    judge, items[row["item_id"]], str(row.get("text") or ""), SCORED_FIRST
+                    judge,
+                    items[row["item_id"]],
+                    str(row.get("text") or ""),
+                    SCORED_FIRST,
                 )
                 found["contestant"] = contestant
                 with out.open("a", encoding="utf-8") as handle:

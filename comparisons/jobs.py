@@ -34,7 +34,9 @@ def summaries(args: argparse.Namespace) -> int:
         for item in items:
             messages = prompts.summary_messages(contestant, item, pi)
             if _chars(messages) > MAX_RELAY_CHARS:
-                raise ValueError(f"{item['item_id']} is over the relay's character limit")
+                raise ValueError(
+                    f"{item['item_id']} is over the relay's character limit"
+                )
             rows.append(
                 {
                     "id": f"sum-{contestant}-{item['item_id']}",
@@ -92,10 +94,15 @@ def contexts(work: Path, items: list[dict[str, Any]]) -> dict[tuple[str, str], s
     from arenas.compress import build
     from tokenizers import Tokenizer
 
-    tokenizer = Tokenizer.from_pretrained(build.TOKENIZER, revision=build.TOKENIZER_REVISION)
+    tokenizer = Tokenizer.from_pretrained(
+        build.TOKENIZER, revision=build.TOKENIZER_REVISION
+    )
     found: dict[tuple[str, str], str] = {}
     for contestant in prompts.SUMMARISERS:
-        rows = {row["item_id"]: row for row in read_rows(work / "outputs" / f"{contestant}.jsonl")}
+        rows = {
+            row["item_id"]: row
+            for row in read_rows(work / "outputs" / f"{contestant}.jsonl")
+        }
         for item in items:
             row = rows.get(item["item_id"])
             if row is None or row.get("error"):
@@ -118,7 +125,9 @@ def probes_of(item: dict[str, Any]) -> list[dict[str, Any]]:
 def reader(args: argparse.Namespace) -> int:
     work = Path(args.work)
     items = prompts.load_items(Path(args.items))
-    template = (Path(args.package) / "materials/prompts/probe.md").read_text(encoding="utf-8")
+    template = (Path(args.package) / "materials/prompts/probe.md").read_text(
+        encoding="utf-8"
+    )
     held = contexts(work, items)
     rows = []
     for contestant in prompts.CONTESTANTS:
@@ -145,9 +154,7 @@ def reader(args: argparse.Namespace) -> int:
     if over:
         raise ValueError(f"over the relay's character limit: {over[:5]}")
     write_rows(work / "reader.jobs.jsonl", rows)
-    floors = {
-        item["item_id"]: held[("C0", item["item_id"])] for item in items
-    }
+    floors = {item["item_id"]: held[("C0", item["item_id"])] for item in items}
     (work / "floor_contexts.json").write_text(
         json.dumps(floors, ensure_ascii=False), encoding="utf-8"
     )
@@ -214,9 +221,9 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--pi", default="")
     args = parser.parse_args(argv)
     return int(
-        {"summaries": summaries, "collect": collect, "reader": reader, "judge": judge}[args.step](
-            args
-        )
+        {"summaries": summaries, "collect": collect, "reader": reader, "judge": judge}[
+            args.step
+        ](args)
     )
 
 

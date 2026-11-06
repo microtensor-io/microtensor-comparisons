@@ -44,7 +44,9 @@ def quality(table: list[dict[str, Any]], out: Path, plt: Any) -> None:
         ("Recall of key facts", lambda r: r["recall"], False),
         ("Kept all 9 headings", lambda r: r["format_valid_rate"], False),
     ]
-    figure, axes = plt.subplots(1, 3, figsize=(9.6, 3.4), dpi=DPI, facecolor=SURFACE, sharey=True)
+    figure, axes = plt.subplots(
+        1, 3, figsize=(9.6, 3.4), dpi=DPI, facecolor=SURFACE, sharey=True
+    )
     for axis, (title, value, whiskers) in zip(axes, panels, strict=True):
         style(axis)
         for at, row in enumerate(table):
@@ -55,10 +57,18 @@ def quality(table: list[dict[str, Any]], out: Path, plt: Any) -> None:
                 low, high = row["pass_rate_lower"] * 100, row["pass_rate_upper"] * 100
                 axis.plot([at, at], [low, high], color=INK, linewidth=1)
                 for edge in (low, high):
-                    axis.plot([at - 0.09, at + 0.09], [edge, edge], color=INK, linewidth=1)
+                    axis.plot(
+                        [at - 0.09, at + 0.09], [edge, edge], color=INK, linewidth=1
+                    )
                 top = high
             axis.text(
-                at, top + 2, f"{height:.1f}%", ha="center", fontsize=8, color=INK, weight="bold"
+                at,
+                top + 2,
+                f"{height:.1f}%",
+                ha="center",
+                fontsize=8,
+                color=INK,
+                weight="bold",
             )
         axis.set_xticks(range(len(table)))
         axis.set_xticklabels([short(r) for r in table], fontsize=8, color=INK_SOFT)
@@ -90,11 +100,32 @@ def failures(table: list[dict[str, Any]], out: Path, plt: Any) -> None:
         scored = max(0, row["format_valid_items"] - passed)
         broken = row["graded_items"] - row["format_valid_items"]
         left = 0
-        for count, colour, ink in ((passed, PASSED, "white"), (scored, NEUTRAL, INK), (broken, FAILED, INK)):
+        for count, colour, ink in (
+            (passed, PASSED, "white"),
+            (scored, NEUTRAL, INK),
+            (broken, FAILED, INK),
+        ):
             if not count:
                 continue
-            axis.barh(at, count, left=left, height=0.58, color=colour, edgecolor=SURFACE, linewidth=2)
-            axis.text(left + count / 2, at, str(count), ha="center", va="center", fontsize=8, color=ink, weight="bold")
+            axis.barh(
+                at,
+                count,
+                left=left,
+                height=0.58,
+                color=colour,
+                edgecolor=SURFACE,
+                linewidth=2,
+            )
+            axis.text(
+                left + count / 2,
+                at,
+                str(count),
+                ha="center",
+                va="center",
+                fontsize=8,
+                color=ink,
+                weight="bold",
+            )
             left += count
     axis.set_yticks(range(len(table)))
     axis.set_yticklabels([short(r) for r in table], fontsize=8.5, color=INK)
@@ -121,7 +152,13 @@ def failures(table: list[dict[str, Any]], out: Path, plt: Any) -> None:
     plt.close(figure)
 
 
-def lengths(table: list[dict[str, Any]], raw: list[dict[str, Any]], limit: int, out: Path, plt: Any) -> None:
+def lengths(
+    table: list[dict[str, Any]],
+    raw: list[dict[str, Any]],
+    limit: int,
+    out: Path,
+    plt: Any,
+) -> None:
     from matplotlib.lines import Line2D
 
     rng = random.Random(SEED)
@@ -142,9 +179,23 @@ def lengths(table: list[dict[str, Any]], raw: list[dict[str, Any]], limit: int, 
                 markeredgewidth=1.2,
             )
         capped = sum(1 for r in mine if r["output_tokens"] >= limit)
-        axis.text(limit + 45, at, f"{capped} of {len(mine)} at the limit", va="center", fontsize=8, color=INK_SOFT)
+        axis.text(
+            limit + 45,
+            at,
+            f"{capped} of {len(mine)} at the limit",
+            va="center",
+            fontsize=8,
+            color=INK_SOFT,
+        )
     axis.axvline(limit, color=LIMIT, linewidth=1, linestyle=(0, (4, 3)))
-    axis.text(limit, -0.72, f"{limit:,} token limit", ha="center", fontsize=7.5, color=INK_SOFT)
+    axis.text(
+        limit,
+        -0.72,
+        f"{limit:,} token limit",
+        ha="center",
+        fontsize=7.5,
+        color=INK_SOFT,
+    )
     axis.set_yticks(range(len(table)))
     axis.set_yticklabels([short(r) for r in table], fontsize=8.5, color=INK)
     axis.set_ylim(len(table) - 0.45, -0.95)
@@ -153,7 +204,15 @@ def lengths(table: list[dict[str, Any]], raw: list[dict[str, Any]], limit: int, 
     axis.grid(axis="x", color=RULE, linewidth=0.7)
     axis.legend(
         handles=[
-            Line2D([], [], marker="o", linestyle="", markersize=5.5, color=INK_SOFT, label="Kept all 9 headings"),
+            Line2D(
+                [],
+                [],
+                marker="o",
+                linestyle="",
+                markersize=5.5,
+                color=INK_SOFT,
+                label="Kept all 9 headings",
+            ),
             Line2D(
                 [],
                 [],
@@ -183,7 +242,11 @@ def dataset(items: list[dict[str, Any]], cap: int, out: Path, plt: Any) -> None:
     figure, axis = plt.subplots(figsize=(9.6, 2.3), dpi=DPI, facecolor=SURFACE)
     style(axis)
     for at, (key, name) in enumerate(names.items()):
-        mine = [i["label"]["input_tokens"] for i in items if i["label"]["paper"]["set"] == key]
+        mine = [
+            i["label"]["input_tokens"]
+            for i in items
+            if i["label"]["paper"]["set"] == key
+        ]
         for tokens in mine:
             axis.plot(
                 tokens / 1000,
@@ -202,7 +265,14 @@ def dataset(items: list[dict[str, Any]], cap: int, out: Path, plt: Any) -> None:
             color=INK,
         )
     axis.axvline(cap / 1000, color=LIMIT, linewidth=1, linestyle=(0, (4, 3)))
-    axis.text(cap / 1000 - 1.5, 1.42, f"arena limit {cap:,}", ha="right", fontsize=7.5, color=INK_SOFT)
+    axis.text(
+        cap / 1000 - 1.5,
+        1.42,
+        f"arena limit {cap:,}",
+        ha="right",
+        fontsize=7.5,
+        color=INK_SOFT,
+    )
     axis.set_yticks([])
     axis.set_ylim(1.6, -0.7)
     axis.set_xlim(0, cap / 1000 + 6)
@@ -226,7 +296,11 @@ def main(argv: list[str] | None = None) -> int:
     out = Path(args.out)
     analysis = json.loads((out / "analysis.json").read_text(encoding="utf-8"))
     table = [row for row in analysis["summary"] if row.get("pass_rate") is not None]
-    raw = [row for row in read_rows(out / "raw.jsonl") if row.get("output_tokens") is not None]
+    raw = [
+        row
+        for row in read_rows(out / "raw.jsonl")
+        if row.get("output_tokens") is not None
+    ]
     items = read_rows(Path(args.items))
     document = json.loads((out / "comparison.json").read_text(encoding="utf-8"))
     limit = int(document["settings"]["max_output_tokens"])

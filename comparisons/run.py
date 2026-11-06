@@ -50,7 +50,9 @@ def done(path: Path, key: str) -> set[str]:
     return {row[key] for row in read_rows(path) if not row.get("error")}
 
 
-def generate(endpoint: str, prompt: str, stop: list[str], max_tokens: int) -> dict[str, Any]:
+def generate(
+    endpoint: str, prompt: str, stop: list[str], max_tokens: int
+) -> dict[str, Any]:
     body = {
         "model": SERVED_NAME,
         "prompt": prompt,
@@ -66,7 +68,9 @@ def generate(endpoint: str, prompt: str, stop: list[str], max_tokens: int) -> di
     text: list[str] = []
     usage: dict[str, Any] = {}
     with httpx.Client(timeout=CALL_SECONDS) as http:
-        with http.stream("POST", endpoint.rstrip("/") + "/v1/completions", json=body) as response:
+        with http.stream(
+            "POST", endpoint.rstrip("/") + "/v1/completions", json=body
+        ) as response:
             response.raise_for_status()
             for line in response.iter_lines():
                 if not line.startswith("data:"):
@@ -97,7 +101,9 @@ def engine(args: argparse.Namespace) -> int:
     template, stop = arena_prompt(args.arena)
     out = Path(args.work) / "outputs" / f"{args.contestant}.jsonl"
     have = done(out, "item_id")
-    generate(args.endpoint, render(template, {"system": "", "user": WARM_PROMPT}), stop, 8)
+    generate(
+        args.endpoint, render(template, {"system": "", "user": WARM_PROMPT}), stop, 8
+    )
     for position, item in enumerate(items, 1):
         if item["item_id"] in have:
             continue
@@ -121,7 +127,13 @@ def engine(args: argparse.Namespace) -> int:
         except (httpx.HTTPError, ValueError) as exc:
             row["error"] = f"{type(exc).__name__}: {exc}"[:400]
         append(out, row)
-        print(position, item["item_id"], row.get("output_tokens"), row.get("total_ms"), flush=True)
+        print(
+            position,
+            item["item_id"],
+            row.get("output_tokens"),
+            row.get("total_ms"),
+            flush=True,
+        )
     return 0
 
 

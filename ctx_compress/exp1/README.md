@@ -84,7 +84,7 @@ M1, M2 and M3 are archived at `microtensor-io/ctx_compress-e7528c49`, `microtens
 | p95 time | 30.5 s | 30.7 s | 30.1 s | 28.4 s |
 | Median time to first token | 3.4 s | 3.4 s | 3.4 s | 3.5 s |
 | GPU cost per compaction | $0.0059 | $0.0064 | $0.0044 | $0.0034 |
-| Cost per compaction with the $0.001 selling price | $0.0069 | $0.0074 | $0.0054 | not sold |
+| Cost per compaction with the list price ($0.01 per 1M input tokens, output free) | $0.0066 | $0.0070 | $0.0051 | not sold |
 | Mean output tokens | 2,474 | 2,680 | 1,719 | 1,263 |
 
 Where the items went, out of 36:
@@ -115,7 +115,7 @@ Reading it:
 - **No frontier numbers yet.** Nothing here says how these models compare with Haiku, GLM or Sonnet.
 - **No reader or judge yet.** Planted fact recall, confident wrong answers and commitment pass rates are not measured for any contestant, and the paired McNemar tests in `results/tests.csv` are empty.
 - **Continuation is measured only on scorable summaries.** A summary that fails format or budget scores zero whatever its continuation would be, so the probe model was not run on those.
-- **The selling price changed after the run.** A compaction listed at $0.005 when the models were run. The list price was lowered to $0.001 on 2026-11-06 and the cost figures here use the new price. Measured GPU cost is unchanged, and at $0.001 the price is below it.
+- **The list price changed after the run.** A compaction listed at a flat $0.005 when the models were run. On 2026-11-06 the price became $0.01 per million input tokens with output tokens free, which is about $0.0007 for a typical session here. The cost figures use the new price. Measured GPU cost is unchanged and is higher than the list price.
 - **The pod price was the secure cloud price.** No cheaper community card was free at the time, so GPU cost uses $0.89 an hour.
 - **Set A was generated with Python 3.11.** The replication package asks for 3.14. The generator only uses the standard library's seeded random module, and the built plans passed the package's own consistency checks.
 - **The hand check is not done.** `results/hand_check.md` lists ten summaries drawn at random for a person to read against their sessions.

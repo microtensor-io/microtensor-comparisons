@@ -42,7 +42,9 @@ def _fact(fact: dict[str, Any], session: str) -> dict[str, Any]:
     }
 
 
-def _commitment(probe: dict[str, Any], session: str, skipped: set[str]) -> dict[str, Any]:
+def _commitment(
+    probe: dict[str, Any], session: str, skipped: set[str]
+) -> dict[str, Any]:
     flat = _flat(session)
     keys = [str(key) for key in probe["dependency_text"]]
     return {
@@ -65,11 +67,14 @@ def _commitment(probe: dict[str, Any], session: str, skipped: set[str]) -> dict[
 def _keep_visible(item: dict[str, Any]) -> dict[str, int]:
     session = item["task"]["user"]
     label = item["label"]
-    facts = [f for f in label["facts"] if any(mentions(session, a) for a in f["aliases"])]
+    facts = [
+        f for f in label["facts"] if any(mentions(session, a) for a in f["aliases"])
+    ]
     probes = [
         p
         for p in label["probes"]
-        if p.get("type", "exact") != "exact" or any(mentions(session, a) for a in p["answers"])
+        if p.get("type", "exact") != "exact"
+        or any(mentions(session, a) for a in p["answers"])
     ]
     pruned = {
         "facts": len(label["facts"]) - len(facts),
@@ -96,13 +101,17 @@ def _item(
     return item, _keep_visible(item)
 
 
-def set_a(folder: Path, count: Callable[[str], int]) -> tuple[list[dict[str, Any]], list[str]]:
+def set_a(
+    folder: Path, count: Callable[[str], int]
+) -> tuple[list[dict[str, Any]], list[str]]:
     items: list[dict[str, Any]] = []
     dropped: list[str] = []
     for path in sorted(folder.glob("*.jsonl")):
         plan = json.loads(path.with_suffix(".plan.json").read_text(encoding="utf-8"))
         row = pi_row(path)
-        row.update(session_id=plan["session_id"], repo=f"s1-{plan['story']}", license="MIT")
+        row.update(
+            session_id=plan["session_id"], repo=f"s1-{plan['story']}", license="MIT"
+        )
         made = _item(parse(row, "pi"), f"exp1-a-{plan['session_id']}", count)
         if made is None:
             dropped.append(plan["session_id"])
@@ -125,9 +134,15 @@ def set_a(folder: Path, count: Callable[[str], int]) -> tuple[list[dict[str, Any
 def set_b(
     folder: Path, package: Path, count: Callable[[str], int]
 ) -> tuple[list[dict[str, Any]], list[str]]:
-    selection = json.loads((package / "materials/s4/selection.json").read_text(encoding="utf-8"))
-    probes = json.loads((package / "materials/s4/probes.json").read_text(encoding="utf-8"))
-    config = json.loads((package / "replication.config.json").read_text(encoding="utf-8"))
+    selection = json.loads(
+        (package / "materials/s4/selection.json").read_text(encoding="utf-8")
+    )
+    probes = json.loads(
+        (package / "materials/s4/probes.json").read_text(encoding="utf-8")
+    )
+    config = json.loads(
+        (package / "replication.config.json").read_text(encoding="utf-8")
+    )
     skipped = set(config["study4"]["skip_probes"])
     items: list[dict[str, Any]] = []
     dropped: list[str] = []
@@ -142,7 +157,9 @@ def set_b(
         item, pruned = made
         session = item["task"]["user"]
         item["label"]["attached"] = [
-            _commitment(probe, session, skipped) for probe in probes if probe["sid"] == sid
+            _commitment(probe, session, skipped)
+            for probe in probes
+            if probe["sid"] == sid
         ]
         item["label"]["paper"] = {
             "set": "B",
@@ -178,7 +195,9 @@ def report(pool: Pool, dropped: dict[str, list[str]], tokenizer: str) -> dict[st
         "facts": {
             "planted": len(facts),
             "in_session": sum(1 for p in facts if p["in_session"]),
-            "by_source": {k: {"in_session": v[0], "planted": v[1]} for k, v in by_source.items()},
+            "by_source": {
+                k: {"in_session": v[0], "planted": v[1]} for k, v in by_source.items()
+            },
             "lures": sum(1 for p in attached if p["kind"] == "lure"),
         },
         "commitments": {
@@ -188,7 +207,9 @@ def report(pool: Pool, dropped: dict[str, list[str]], tokenizer: str) -> dict[st
         },
         "arena_labels": {
             "not_rendered": {
-                kind: sum(i["label"]["paper"]["labels_not_rendered"][kind] for i in pool.items)
+                kind: sum(
+                    i["label"]["paper"]["labels_not_rendered"][kind] for i in pool.items
+                )
                 for kind in ("facts", "probes")
             },
             "facts": build.stats([len(i["label"]["facts"]) for i in pool.items]),

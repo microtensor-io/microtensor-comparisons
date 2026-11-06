@@ -19,9 +19,17 @@ SUMMARISERS = {
     "M2": {"label": "UID 13 model", "runs_on": "4090"},
     "M3": {"label": "UID 14 model", "runs_on": "4090"},
     "B0": {"label": "Granite 4.0 H Micro base", "runs_on": "4090"},
-    "F1": {"label": "Claude Haiku 5.5", "runs_on": "relay", "model": "claude-haiku-5-5"},
+    "F1": {
+        "label": "Claude Haiku 5.5",
+        "runs_on": "relay",
+        "model": "claude-haiku-5-5",
+    },
     "F2": {"label": "GLM 5.3 Flash", "runs_on": "relay", "model": "glm-5-3-flash"},
-    "F3": {"label": "Claude Sonnet 5.5", "runs_on": "relay", "model": "claude-sonnet-5-5"},
+    "F3": {
+        "label": "Claude Sonnet 5.5",
+        "runs_on": "relay",
+        "model": "claude-sonnet-5-5",
+    },
     "P1": {
         "label": "Claude Sonnet 5.5, Pi prompt",
         "runs_on": "relay",
@@ -38,12 +46,25 @@ READER = "claude-sonnet-5-5"
 JUDGE = "claude-opus-5-5"
 SECOND_JUDGE = "claude-sonnet-5-5"
 LIST_PRICES = {
-    "claude-haiku-5-5": {"provider_model": "anthropic/claude-haiku-5.5", "in": 0.10, "out": 0.50},
+    "claude-haiku-5-5": {
+        "provider_model": "anthropic/claude-haiku-5.5",
+        "in": 0.10,
+        "out": 0.50,
+    },
     "glm-5-3-flash": {"provider_model": "z-ai/glm-5.3-flash", "in": 0.15, "out": 0.50},
-    "claude-sonnet-5-5": {"provider_model": "anthropic/claude-sonnet-5.5", "in": 2.0, "out": 10.0},
-    "claude-opus-5-5": {"provider_model": "anthropic/claude-opus-5.5", "in": 4.0, "out": 20.0},
+    "claude-sonnet-5-5": {
+        "provider_model": "anthropic/claude-sonnet-5.5",
+        "in": 2.0,
+        "out": 10.0,
+    },
+    "claude-opus-5-5": {
+        "provider_model": "anthropic/claude-opus-5.5",
+        "in": 4.0,
+        "out": 20.0,
+    },
 }
-SELLING_PRICE_USD = 0.001
+LIST_PRICE_IN_PER_MTOK = 0.01
+LIST_PRICE_OUT_PER_MTOK = 0.0
 
 READER_SYSTEM = (
     "You are the coding agent in the session recorded below. That record is all that is left of "
@@ -65,13 +86,21 @@ PI_USER = "<conversation>\n{conversation}\n</conversation>\n\n{prompt}"
 
 
 def load_items(path: Path) -> list[dict[str, Any]]:
-    return [json.loads(line) for line in path.read_text(encoding="utf-8").splitlines() if line]
+    return [
+        json.loads(line)
+        for line in path.read_text(encoding="utf-8").splitlines()
+        if line
+    ]
 
 
 def read_rows(path: Path) -> list[dict[str, Any]]:
     if not path.is_file():
         return []
-    return [json.loads(line) for line in path.read_text(encoding="utf-8").splitlines() if line]
+    return [
+        json.loads(line)
+        for line in path.read_text(encoding="utf-8").splitlines()
+        if line
+    ]
 
 
 def write_rows(path: Path, rows: list[dict[str, Any]]) -> None:
@@ -92,10 +121,12 @@ def pi_prompts(package: Path) -> dict[str, str]:
     folder = package / "dist" / "core" / "compaction"
     return {
         "system": _literal(
-            (folder / "utils.js").read_text(encoding="utf-8"), "SUMMARIZATION_SYSTEM_PROMPT"
+            (folder / "utils.js").read_text(encoding="utf-8"),
+            "SUMMARIZATION_SYSTEM_PROMPT",
         ),
         "prompt": _literal(
-            (folder / "compaction.js").read_text(encoding="utf-8"), "SUMMARIZATION_PROMPT"
+            (folder / "compaction.js").read_text(encoding="utf-8"),
+            "SUMMARIZATION_PROMPT",
         ),
     }
 
@@ -109,7 +140,9 @@ def summary_messages(
             {"role": "system", "content": pi["system"]},
             {
                 "role": "user",
-                "content": PI_USER.format(conversation=task["user"], prompt=pi["prompt"]),
+                "content": PI_USER.format(
+                    conversation=task["user"], prompt=pi["prompt"]
+                ),
             },
         ]
     return [
@@ -121,7 +154,10 @@ def summary_messages(
 def reader_messages(context: str, message: str) -> list[dict[str, str]]:
     return [
         {"role": "system", "content": READER_SYSTEM},
-        {"role": "user", "content": READER_USER.format(context=context, message=message)},
+        {
+            "role": "user",
+            "content": READER_USER.format(context=context, message=message),
+        },
     ]
 
 
@@ -133,7 +169,9 @@ def commitment_message(probe: dict[str, Any]) -> str:
     return probe["instruction"].rstrip() + "\n\n" + MEMORY_NOTE
 
 
-def judge_messages(brief: str, probe: dict[str, Any], reply: str) -> list[dict[str, str]]:
+def judge_messages(
+    brief: str, probe: dict[str, Any], reply: str
+) -> list[dict[str, str]]:
     item = {
         "dependency": probe["dependency"],
         "dependency_key_strings": probe["keys"],
@@ -143,5 +181,8 @@ def judge_messages(brief: str, probe: dict[str, Any], reply: str) -> list[dict[s
     }
     return [
         {"role": "system", "content": brief},
-        {"role": "user", "content": JUDGE_INSTRUCTION + json.dumps(item, ensure_ascii=False)},
+        {
+            "role": "user",
+            "content": JUDGE_INSTRUCTION + json.dumps(item, ensure_ascii=False),
+        },
     ]

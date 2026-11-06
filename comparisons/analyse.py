@@ -31,7 +31,11 @@ GROUPS = {
     "F3": "Frontier models",
     "P1": "Frontier models",
 }
-COLOURS = {"Miner models": "#2a78d6", "Frontier models": "#eb6834", "Base model": "#1baf7a"}
+COLOURS = {
+    "Miner models": "#2a78d6",
+    "Frontier models": "#eb6834",
+    "Base model": "#1baf7a",
+}
 SURFACE = "#fcfcfb"
 INK = "#0b0b0b"
 INK_SOFT = "#52514e"
@@ -53,7 +57,9 @@ def mcnemar(first_only: int, second_only: int) -> float:
     total = first_only + second_only
     if not total:
         return 1.0
-    tail = sum(comb(total, k) for k in range(min(first_only, second_only) + 1)) / 2**total
+    tail = (
+        sum(comb(total, k) for k in range(min(first_only, second_only) + 1)) / 2**total
+    )
     return min(1.0, 2 * tail)
 
 
@@ -143,7 +149,9 @@ def judged(work: Path) -> tuple[dict[tuple[str, str], dict[str, Any]], dict[str,
         votes = []
         for vote in range(prompts.JUDGE_VOTES):
             held = rows.get(f"jd-{blind}-v{vote}") or {}
-            parsed = None if held.get("error") else parse_vote(str(held.get("text") or ""))
+            parsed = (
+                None if held.get("error") else parse_vote(str(held.get("text") or ""))
+            )
             if parsed is not None:
                 votes.append(parsed)
         if not votes:
@@ -151,41 +159,56 @@ def judged(work: Path) -> tuple[dict[tuple[str, str], dict[str, Any]], dict[str,
         passes = sum(v["pass"] for v in votes)
         passed = passes * 2 > len(votes)
         failing = [v for v in votes if not v["pass"]]
-        confident = (
-            not passed and sum(v["confident"] is True for v in failing) * 2 > len(failing)
-        )
+        confident = not passed and sum(
+            v["confident"] is True for v in failing
+        ) * 2 > len(failing)
         found[(case["contestant"], case["probe"])] = {
             "passed": passed,
             "votes": [v["pass"] for v in votes],
             "confident_failure": confident,
         }
         second = rows.get(f"j2-{blind}") or {}
-        other = None if second.get("error") else parse_vote(str(second.get("text") or ""))
+        other = (
+            None if second.get("error") else parse_vote(str(second.get("text") or ""))
+        )
         if other is not None and second:
             pairs.append((passed, other["pass"]))
             found[(case["contestant"], case["probe"])]["second_judge"] = other["pass"]
     return found, {"pairs": len(pairs), "kappa": kappa(pairs)}
 
 
-def cost_of(contestant: str, row: dict[str, Any], hourly: float) -> tuple[float | None, str]:
+def cost_of(
+    contestant: str, row: dict[str, Any], hourly: float
+) -> tuple[float | None, str]:
     held = prompts.SUMMARISERS[contestant]
     if held["runs_on"] == "relay":
         price = prompts.LIST_PRICES[held["model"]]
-        cost = (row["input_tokens"] * price["in"] + row["output_tokens"] * price["out"]) / 1e6
+        cost = (
+            row["input_tokens"] * price["in"] + row["output_tokens"] * price["out"]
+        ) / 1e6
         return cost, "relay receipt tokens at list price"
     compute = hourly * float(row["total_ms"]) / 3_600_000
     if contestant == "B0":
         return compute, "4090 time at the pod's hourly price"
+    listed = (
+        row["input_tokens"] * prompts.LIST_PRICE_IN_PER_MTOK
+        + row["output_tokens"] * prompts.LIST_PRICE_OUT_PER_MTOK
+    ) / 1e6
     return (
-        compute + prompts.SELLING_PRICE_USD,
-        "4090 time at the pod's hourly price plus the 0.001 USD selling price",
+        compute + listed,
+        "4090 time at the pod's hourly price plus the list price of 0.01 USD per million "
+        "input tokens, output free",
     )
 
 
 def assemble(args: argparse.Namespace) -> dict[str, Any]:
     work = Path(args.work)
     items = prompts.load_items(Path(args.items))
-    pod = json.loads((work / "pod_info.json").read_text()) if (work / "pod_info.json").is_file() else {}
+    pod = (
+        json.loads((work / "pod_info.json").read_text())
+        if (work / "pod_info.json").is_file()
+        else {}
+    )
     hourly = float(pod.get("usd_per_hour") or HOURLY_FALLBACK)
     replies = {row["id"]: row for row in read_rows(work / "reader.jobs.results.jsonl")}
     verdicts, agreement = judged(work)
@@ -195,12 +218,18 @@ def assemble(args: argparse.Namespace) -> dict[str, Any]:
     for contestant in prompts.CONTESTANTS:
         summariser = contestant in prompts.SUMMARISERS
         outputs = (
-            {r["item_id"]: r for r in read_rows(work / "outputs" / f"{contestant}.jsonl")}
+            {
+                r["item_id"]: r
+                for r in read_rows(work / "outputs" / f"{contestant}.jsonl")
+            }
             if summariser
             else {}
         )
         graded = (
-            {r["item_id"]: r for r in read_rows(work / "graded" / f"{contestant}.jsonl")}
+            {
+                r["item_id"]: r
+                for r in read_rows(work / "graded" / f"{contestant}.jsonl")
+            }
             if summariser
             else {}
         )
@@ -216,7 +245,9 @@ def assemble(args: argparse.Namespace) -> dict[str, Any]:
             status[contestant] = "waiting for the reader"
             continue
         else:
-            status[contestant] = "complete" if read else "summaries and grades done, no reader yet"
+            status[contestant] = (
+                "complete" if read else "summaries and grades done, no reader yet"
+            )
         for item in items:
             label = item["label"]
             out = outputs.get(item["item_id"]) or {}
@@ -224,7 +255,9 @@ def assemble(args: argparse.Namespace) -> dict[str, Any]:
                 continue
             row: dict[str, Any] = {
                 "contestant": contestant,
-                "label": {**prompts.SUMMARISERS, **prompts.REFERENCES}[contestant]["label"],
+                "label": {**prompts.SUMMARISERS, **prompts.REFERENCES}[contestant][
+                    "label"
+                ],
                 "item_id": item["item_id"],
                 "set": label["paper"]["set"],
                 "session_tokens": label["input_tokens"],
@@ -242,7 +275,9 @@ def assemble(args: argparse.Namespace) -> dict[str, Any]:
                     time_source=PROVIDER_TIME if relay else POD_TIME,
                     cost_usd=cost,
                     cost_basis=basis,
-                    gpu_cost_usd=None if relay else hourly * float(out["total_ms"]) / 3_600_000,
+                    gpu_cost_usd=None
+                    if relay
+                    else hourly * float(out["total_ms"]) / 3_600_000,
                     relay_cost_micros=out.get("cost_micros"),
                     receipt=out.get("receipt"),
                 )
@@ -273,18 +308,27 @@ def assemble(args: argparse.Namespace) -> dict[str, Any]:
                 if probe["kind"] == "commitment":
                     verdict = verdicts.get((contestant, probe["id"]))
                     probes.append(
-                        {"id": probe["id"], "kind": "commitment", "reply": reply, **(verdict or {})}
+                        {
+                            "id": probe["id"],
+                            "kind": "commitment",
+                            "reply": reply,
+                            **(verdict or {}),
+                        }
                     )
                 else:
                     probes.append(score_fact(scoring, probe, reply))
             facts = [p for p in probes if p["kind"] == "fact"]
             lures = [p for p in probes if p["kind"] == "lure"]
-            commitments = [p for p in probes if p["kind"] == "commitment" and "passed" in p]
+            commitments = [
+                p for p in probes if p["kind"] == "commitment" and "passed" in p
+            ]
             row.update(
                 facts_asked=len(facts),
                 facts_correct=sum(p["correct"] or 0 for p in facts),
                 facts_in_cut=sum(1 for p in facts if p["in_cut"]),
-                facts_in_cut_correct=sum(p["correct"] or 0 for p in facts if p["in_cut"]),
+                facts_in_cut_correct=sum(
+                    p["correct"] or 0 for p in facts if p["in_cut"]
+                ),
                 facts_confident_wrong=sum(p["confident_wrong"] or 0 for p in facts),
                 lures_asked=len(lures),
                 lures_taken=sum(p["lure_taken"] for p in lures),
@@ -325,7 +369,9 @@ def summarise(found: dict[str, Any]) -> list[dict[str, Any]]:
             measured = [
                 r["continuation"]
                 for r in marked
-                if r["continuation"] is not None and r["format_valid"] and r["within_budget"]
+                if r["continuation"] is not None
+                and r["format_valid"]
+                and r["within_budget"]
             ]
             line.update(
                 graded_items=len(marked),
@@ -358,7 +404,9 @@ def summarise(found: dict[str, Any]) -> list[dict[str, Any]]:
                 planted_fact_recall_lower=low,
                 planted_fact_recall_upper=high,
                 planted_fact_recall_in_cut=(
-                    sum(r["facts_in_cut_correct"] for r in rows) / seen if seen else None
+                    sum(r["facts_in_cut_correct"] for r in rows) / seen
+                    if seen
+                    else None
                 ),
                 lures_taken=sum(r["lures_taken"] for r in rows),
                 confident_wrong=wrong,
@@ -388,7 +436,13 @@ def summarise(found: dict[str, Any]) -> list[dict[str, Any]]:
                 time_source=rows[0]["time_source"],
                 cost_per_compaction_usd=mean(costs),
                 gpu_cost_per_compaction_usd=(
-                    mean([r["gpu_cost_usd"] for r in rows if r.get("gpu_cost_usd") is not None])
+                    mean(
+                        [
+                            r["gpu_cost_usd"]
+                            for r in rows
+                            if r.get("gpu_cost_usd") is not None
+                        ]
+                    )
                 ),
                 cost_basis=rows[0]["cost_basis"],
                 mean_output_tokens=mean([r["output_tokens"] for r in rows]),
@@ -454,7 +508,11 @@ def write_csv(path: Path, rows: list[dict[str, Any]], columns: list[str]) -> Non
                 [
                     ""
                     if row.get(name) is None
-                    else (f"{row[name]:.6g}" if isinstance(row[name], float) else row[name])
+                    else (
+                        f"{row[name]:.6g}"
+                        if isinstance(row[name], float)
+                        else row[name]
+                    )
                     for name in columns
                 ]
             )
@@ -518,8 +576,14 @@ def chart(table: list[dict[str, Any]], path: Path) -> None:
     import matplotlib.pyplot as plt
     from matplotlib.lines import Line2D
 
-    dots = [r for r in table if r.get("pass_rate") is not None and r.get("cost_per_compaction_usd")]
-    facts = {r["contestant"]: r for r in table if r.get("planted_fact_recall") is not None}
+    dots = [
+        r
+        for r in table
+        if r.get("pass_rate") is not None and r.get("cost_per_compaction_usd")
+    ]
+    facts = {
+        r["contestant"]: r for r in table if r.get("planted_fact_recall") is not None
+    }
     panels = [("pass_rate", "Arena pass rate", "pass_rate_lower", "pass_rate_upper")]
     if any(r["contestant"] in facts for r in dots):
         panels.append(
@@ -531,7 +595,11 @@ def chart(table: list[dict[str, Any]], path: Path) -> None:
             )
         )
     figure, axes = plt.subplots(
-        1, len(panels), figsize=(6.4 * len(panels) + 0.6, 5.2), dpi=200, facecolor=SURFACE
+        1,
+        len(panels),
+        figsize=(6.4 * len(panels) + 0.6, 5.2),
+        dpi=200,
+        facecolor=SURFACE,
     )
     axes = [axes] if len(panels) == 1 else list(axes)
     for axis, (name, title, low, high) in zip(axes, panels, strict=True):
@@ -541,7 +609,11 @@ def chart(table: list[dict[str, Any]], path: Path) -> None:
             colour = COLOURS[GROUPS[row["contestant"]]]
             x, y = row["cost_per_compaction_usd"], row[name] * 100
             axis.plot(
-                [x, x], [row[low] * 100, row[high] * 100], color=colour, linewidth=1, alpha=0.45
+                [x, x],
+                [row[low] * 100, row[high] * 100],
+                color=colour,
+                linewidth=1,
+                alpha=0.45,
             )
             axis.plot(
                 x,
@@ -565,7 +637,9 @@ def chart(table: list[dict[str, Any]], path: Path) -> None:
             for mark in ("C1", "C0"):
                 if mark in facts:
                     level = facts[mark]["planted_fact_recall"] * 100
-                    axis.axhline(level, color=REFERENCE, linewidth=1, linestyle=(0, (4, 3)))
+                    axis.axhline(
+                        level, color=REFERENCE, linewidth=1, linestyle=(0, (4, 3))
+                    )
                     axis.annotate(
                         f"{mark} {facts[mark]['label']} {level:.0f}%",
                         (1.0, level),
@@ -586,7 +660,9 @@ def chart(table: list[dict[str, Any]], path: Path) -> None:
             axis.spines[side].set_visible(False)
         axis.spines["bottom"].set_color(RULE)
         axis.tick_params(colors=INK_SOFT, labelsize=8, length=0)
-        axis.set_xlabel("Cost per compaction, USD (log scale)", fontsize=8.5, color=INK_SOFT)
+        axis.set_xlabel(
+            "Cost per compaction, USD (log scale)", fontsize=8.5, color=INK_SOFT
+        )
         axis.set_title(title, loc="left", fontsize=11, color=INK, pad=12)
         costs = [r["cost_per_compaction_usd"] for r in shown]
         if costs:
@@ -644,9 +720,18 @@ def hand_check(found: dict[str, Any], path: Path) -> None:
     ]
     for at, row in enumerate(chosen, 1):
         score = "" if row.get("item_score") is None else f"{row['item_score']:.2f}"
-        lines.append(f"| {at} | {row['contestant']} | {row['item_id']} | {score} | | | |")
+        lines.append(
+            f"| {at} | {row['contestant']} | {row['item_id']} | {score} | | | |"
+        )
     for at, row in enumerate(chosen, 1):
-        lines += ["", f"## {at}. {row['contestant']} on {row['item_id']}", "", "```", row["summary"], "```"]
+        lines += [
+            "",
+            f"## {at}. {row['contestant']} on {row['item_id']}",
+            "",
+            "```",
+            row["summary"],
+            "```",
+        ]
     path.write_text("\n".join(lines) + "\n", encoding="utf-8", newline="\n")
 
 

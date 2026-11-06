@@ -38,7 +38,7 @@ The reader sees only a context and one question. The context is the contestant's
 | Time | Median and 95th percentile of the total time of one compaction. For local models it is measured next to the engine on the GPU machine. For API models it is the provider's response time, and is labelled so. |
 | Time to first token | Median, local models only. |
 | GPU cost per compaction | The card's hourly price times the measured time of the call. |
-| Cost per compaction | For Microtensor models, GPU cost plus the 0.001 USD selling price of a request. For API models, input and output tokens at the provider's list price. |
+| Cost per compaction | For Microtensor models, GPU cost plus the list price of 0.01 USD per million input tokens, with output tokens free. For API models, input and output tokens at the provider's list price. |
 | Summary length | Output tokens. |
 
 ## Statistics
