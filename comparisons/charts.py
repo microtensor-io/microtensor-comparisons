@@ -14,6 +14,16 @@ INK = "#0b0b0b"
 INK_SOFT = "#52514e"
 RULE = "#e3e2dc"
 SERIES = ["#1e46b4", "#3b78e7", "#79b0f2", "#8a877f"]
+COLOURS = {
+    "M1": "#1e46b4",
+    "M2": "#3b78e7",
+    "M3": "#79b0f2",
+    "B0": "#8a877f",
+    "F1": "#8f3a12",
+    "F2": "#e8742c",
+    "P1": "#1a9a6c",
+}
+SHORT = {"F1": "Qwen\n27B", "F2": "Gemma\n31B", "P1": "Qwen\nPi prompt"}
 PASSED = "#1e46b4"
 NEUTRAL = "#c9c7c0"
 FAILED = "#e8742c"
@@ -22,7 +32,13 @@ DPI = 200
 SEED = 20261106
 
 
+def colour(row: dict[str, Any]) -> str:
+    return COLOURS.get(str(row.get("contestant")), LIMIT)
+
+
 def short(row: dict[str, Any]) -> str:
+    if row.get("contestant") in SHORT:
+        return SHORT[row["contestant"]]
     label = str(row["label"])
     if label.startswith("UID"):
         return " ".join(label.split()[:2])
@@ -45,13 +61,13 @@ def quality(table: list[dict[str, Any]], out: Path, plt: Any) -> None:
         ("Kept all 9 headings", lambda r: r["format_valid_rate"], False),
     ]
     figure, axes = plt.subplots(
-        1, 3, figsize=(9.6, 3.4), dpi=DPI, facecolor=SURFACE, sharey=True
+        1, 3, figsize=(12.6, 3.9), dpi=DPI, facecolor=SURFACE, sharey=True
     )
     for axis, (title, value, whiskers) in zip(axes, panels, strict=True):
         style(axis)
         for at, row in enumerate(table):
             height = value(row) * 100
-            axis.bar(at, height, width=0.62, color=SERIES[at % len(SERIES)])
+            axis.bar(at, height, width=0.62, color=colour(row))
             top = height
             if whiskers:
                 low, high = row["pass_rate_lower"] * 100, row["pass_rate_upper"] * 100
@@ -71,10 +87,10 @@ def quality(table: list[dict[str, Any]], out: Path, plt: Any) -> None:
                 weight="bold",
             )
         axis.set_xticks(range(len(table)))
-        axis.set_xticklabels([short(r) for r in table], fontsize=8, color=INK_SOFT)
-        axis.set_ylim(0, 70)
-        axis.set_yticks(range(0, 71, 20))
-        axis.set_yticklabels([f"{v}%" for v in range(0, 71, 20)])
+        axis.set_xticklabels([short(r) for r in table], fontsize=7.5, color=INK_SOFT)
+        axis.set_ylim(0, 110)
+        axis.set_yticks(range(0, 101, 20))
+        axis.set_yticklabels([f"{v}%" for v in range(0, 101, 20)])
         axis.grid(axis="y", color=RULE, linewidth=0.7)
         axis.set_title(title, loc="left", fontsize=10, color=INK, pad=8)
     figure.text(
@@ -174,8 +190,8 @@ def lengths(
                 y,
                 "o",
                 markersize=5.5,
-                markerfacecolor=SERIES[at % len(SERIES)] if whole else SURFACE,
-                markeredgecolor=SERIES[at % len(SERIES)] if not whole else SURFACE,
+                markerfacecolor=colour(row) if whole else SURFACE,
+                markeredgecolor=colour(row) if not whole else SURFACE,
                 markeredgewidth=1.2,
             )
         capped = sum(1 for r in mine if r["output_tokens"] >= limit)

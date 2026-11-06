@@ -5,3 +5,5 @@ __pycache__/
 sources/
 models/
 *.jobs.jsonl
+open_pods.json
+*.results.jsonl.tmp

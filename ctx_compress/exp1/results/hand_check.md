@@ -4,18 +4,93 @@ Ten summaries drawn at random with seed 20261106. One person reads each summary 
 
 | # | Contestant | Item | Score | Faithful (yes or no) | Invented detail (yes or no) | Note |
 |---|---|---|---|---|---|---|
-| 1 | M1 | exp1-a-s1-s012 | 0.67 | | | |
-| 2 | M1 | exp1-b-41741dcc2b | 0.00 | | | |
-| 3 | M1 | exp1-b-cbc6fdc2b2 | 0.00 | | | |
-| 4 | M2 | exp1-b-4f0d38ac56 | 0.00 | | | |
-| 5 | M1 | exp1-a-s1-s001 | 0.00 | | | |
-| 6 | M3 | exp1-a-s1-s011 | 0.00 | | | |
-| 7 | M3 | exp1-b-bb169ee8ea | 0.00 | | | |
-| 8 | M2 | exp1-b-f783f8f727 | 0.57 | | | |
-| 9 | M1 | exp1-a-s1-s002 | 0.84 | | | |
-| 10 | M1 | exp1-a-s1-s006 | 0.00 | | | |
+| 1 | F1 | exp1-b-41741dcc2b | 0.33 | | | |
+| 2 | M1 | exp1-a-s1-s012 | 0.67 | | | |
+| 3 | M1 | exp1-b-41741dcc2b | 0.00 | | | |
+| 4 | M1 | exp1-b-cbc6fdc2b2 | 0.00 | | | |
+| 5 | M2 | exp1-b-4f0d38ac56 | 0.00 | | | |
+| 6 | M1 | exp1-a-s1-s001 | 0.00 | | | |
+| 7 | F1 | exp1-a-s1-s014 | 0.57 | | | |
+| 8 | P1 | exp1-a-s1-s001 | 0.00 | | | |
+| 9 | M3 | exp1-a-s1-s011 | 0.00 | | | |
+| 10 | M3 | exp1-b-bb169ee8ea | 0.00 | | | |
 
-## 1. M1 on exp1-a-s1-s012
+## 1. F1 on exp1-b-41741dcc2b
+
+```
+## Primary request and intent
+The user wanted to change how "steering" messages are handled in the Pi Web Svelte client and bridge:
+1. **Show steering queue during streaming**: Previously, steering messages only appeared in the UI after a cancel. The user wanted them visible in the queue strip while the agent is actively streaming.
+2. **Cancel steering on abort**: When the user cancels (aborts) the generation, the pending steering messages should be cleared from both the UI and the backend session state.
+3. **Prevent re-sending**: Ensure that cleared steering messages are not accidentally included in the next prompt sent to the agent.
+4. **Scope**: Explicitly excluded the Vue part of the codebase.
+5. **Debugging & Cleanup**: After initial fixes failed, the user requested debug logs to trace the issue. Once resolved, the user requested the removal of these debug logs.
+
+## Key technical concepts
+- **Svelte 5**: Uses `$state`, `$derived`, and `$props` for reactivity in the frontend.
+- **WebSocket RPC Bridge**: A custom protocol (`@pi-web/bridge`) connecting the Svelte client to the Pi coding agent backend.
+- **Agent Session Queues**: The backend `AgentSession` maintains internal `_steeringMessages` and `_followUpMessages` arrays, as well as underlying `agent.steeringQueue` and `agent.followUpQueue` (from `pi-agent-core`).
+- **Queue Types**: Messages are now tagged with `queueType: "steering" | "followUp"` to distinguish them in the UI and logic.
+- **Abort Semantics**: `session.abort()` stops the current run but does not automatically clear pending steering queues in the underlying agent core, requiring explicit cleanup in the bridge.
+
+## Files and code sections
+- **`packages/bridge/types.ts`**
+  - Added `queueType?: "steering" | "followUp"` to `RpcQueuedMessage` interface.
+- **`packages/bridge/ws-rpc-adapter.ts`**
+  - **`toRpcQueuedMessage`**: Updated to accept and include `queueType`.
+  - **`buildTrackedQueuedMessages`**: New helper to merge tracked session messages with agent queue messages, ensuring steering messages are visible even if drained from the agent queue but still tracked in the session.
+  - **`buildQueueUpdateEvent`**: Uses `buildTrackedQueuedMessages` for both steering and followUp.
+  - **`clearSteeringQueue`**: New function called on `abort`. It calls `session.clearQueue()` (which clears both), then restores the `followUp` queue to the agent and session state, effectively clearing only steering.
+  - **`case "abort"`**: Modified to call `clearSteeringQueue(session)` before `session.abort()` for detached sessions.
+- **`packages/svelte/src/composables/bridgeStore.svelte.ts`**
+  - **`normalizeQueuedMessage`**: Parses `queueType` from incoming data.
+  - **`applyQueuedMessages`**: Updated signature to accept `steering` and `followUp` arrays separately, merging them into `_queuedUserMessages`.
+  - **`clearQueuedSteeringMessages`**: New function to filter out `queueType === "steering"` from local state.
+  - **`abortGeneration`**: Calls `clearQueuedSteeringMessages()` after a successful abort RPC.
+  - **`sendPrompt`**: Locally adds messages to `_queuedUserMessages` with the correct `queueType` immediately for optimistic UI updates.
+  - **`dequeueQueuedMessage`**: Logic updated to map the UI index to the correct follow-up index (ignoring steering items) when sending `dequeue_follow_up_message`.
+- **`packages/svelte/src/layout/AppMainContent.svelte`**
+  - Updated the queued messages strip to display a "Steering" badge for steering items and hide Edit/Cancel buttons for them (only follow-ups are editable/cancelable individually).
+- **`packages/bridge/__tests__/ws-rpc-adapter.test.ts`**
+  - Updated existing tests to include `queueType` in expected payloads.
+  - Added new tests: "keeps steering queue visible while the agent is still streaming" and "clears pending steering messages when aborting a detached session".
+
+## Errors and fixes
+- **Steering not visible during streaming**:
+  - *Cause*: The bridge was only reading from `agent.steeringQueue`, which gets drained by the agent loop.
+  - *Fix*: Implemented `buildTrackedQueuedMessages` to read from `session._steeringMessages` (the session's internal tracking array) and merge with the agent queue.
+- **Steering persisted after cancel**:
+  - *Cause*: `session.abort()` did not clear the steering queue.
+  - *Fix*: Added `clearSteeringQueue` in the bridge's abort handler to explicitly clear steering and restore follow-ups.
+- **Cleared steering re-sent on next prompt**:
+  - *Cause*: The underlying agent or session state still held references to the steering messages.
+  - *Fix*: The `clearSteeringQueue` implementation now calls `session.clearQueue()` (which clears both internal arrays and agent queues) and then manually restores the follow-up queue, ensuring steering is completely removed from all layers.
+- **Test failures**:
+  - *Error*: `AssertionError: Target cannot be null or undefined` and `expected "spy" to be called once`.
+  - *Fix*: Updated test mocks to include `_steeringMessages` and `clearQueue` methods, and adjusted assertions to match the new `queueType` structure and clearing behavior.
+
+## Problem solving
+The core problem was a mismatch between the agent's internal queue management and the bridge's view of those queues. By introducing a `queueType` discriminator and ensuring the bridge reads from the session's tracked state (not just the agent's live queue), the UI now reflects the true state of pending messages. The abort logic was hardened to explicitly clear steering messages from both the session's internal tracking and the agent's underlying queue, preventing them from being re-injected in subsequent turns.
+
+## All user messages
+1. "现在 steering 不会在 streaming 时显式入队，而是cancel 之后才会显示。改成streaming的时候显示 steering 队列，cancel后steering的内容也随之cancel。不用关心 vue 部分"
+2. "cancel 后前端的 steering 还保留着"
+3. "不行，还是保留着，并且重新发送后 貌似已清理掉的 steering 消息也会跟着一起发送"
+4. "加日志吧"
+5. "正常了"
+6. "去掉日志"
+
+## Pending tasks
+None. The user confirmed the fix works ("正常了") and requested the removal of debug logs, which has been completed.
+
+## Current work
+The most recent work involved removing the debug logging functions (`logQueueDebug`, `summarizeQueuedMessages`) and their call sites from both `packages/bridge/ws-rpc-adapter.ts` and `packages/svelte/src/composables/bridgeStore.svelte.ts`. The code was formatted with `oxfmt`, and both the bridge tests (`pnpm test -- packages/bridge/__tests__/ws-rpc-adapter.test.ts`) and the web build (`pnpm run build:web`) passed successfully.
+
+## Next step
+The task is complete. No further action is required unless the user requests a commit message or additional changes.
+```
+
+## 2. M1 on exp1-a-s1-s012
 
 ```
 ## Primary request and intent
@@ -98,7 +173,7 @@ Details: Logs are on ledger-batch-1 under /var/log/ledgerd/.
 Next action: edit tests/upload/test_fx_rate_cache.py
 ```
 
-## 2. M1 on exp1-b-41741dcc2b
+## 3. M1 on exp1-b-41741dcc2b
 
 ```
 ## Primary request and intent
@@ -117,7 +192,7 @@ Details:
 - Edited: packages/bridge/types.ts, packages/bridge/ws-rpc-adapter.ts, packages/svelte/src/composables/bridgeStore.svelte.ts, packages/svelte/src/layout/AppMainContent.svelte, packages/svelte/src/composables/bridgeStore.svelte.ts, packages/svelte/src/App.svelte, packages/svelte/src/composables/bridgeStore.svelte.ts, packages/svelte/src/composables/bridgeStore.svelte.ts, packages/svelte/src/composables/bridgeStore.svelte.ts, packages/svelte/src/composables/bridgeStore.svelte.ts, packages/svelte/src/composables/bridgeStore.svelte.ts, packages/svelte/src/composables/bridgeStore.svelte.ts, packages/svelte/src/composables/bridgeStore.svelte.ts, packages/svelte/src/composables/bridgeStore.svelte.ts, packages/svelte/src/composables/bridgeStore.svelte.ts, packages/svelte/src/composables/bridgeStore.svelte.ts, packages/svelte/src/composables/bridgeStore.svelte.ts, packages/svelte/src/composables/bridgeStore.svelte.ts, packages/svelte/src/composables/bridgeStore.svelte.ts, packages/svelte/src/composables/bridgeStore.svelte.ts, packages/svelte/src/composables/bridgeStore.svelte.ts, packages/svelte/src/composables/bridgeStore.svelte.ts, packages/bridge/__tests__/ws-rpc-adapter.test.ts, packages/bridge/__tests__/ws-rpc-adapter.test.ts, packages/bridge/__tests__/ws-rpc-adapter.test.ts, packages/bridge/__tests__/ws-rpc-adapter.test.ts, packages/bridge/__tests__/ws-rpc-adapter.test.ts, packages/bridge/__tests__/ws-rpc-adapter.test.ts, packages/bridge/__tests__/ws-rpc-adapter.test.ts, packages/bridge/__tests__/ws-rpc-adapter.test.ts, packages/bridge/__tests__/ws-rpc-adapter.test.ts, packages/bridge/__tests__/ws-rpc-adapter.test.ts, packages/bridge/__tests__/ws-rpc-adapter.test.ts, packages/bridge/__tests__/ws-rpc-adapter.test.ts, packages/bridge/__tests__/ws-rpc-adapter.test.ts, packages/bridge/__tests__/ws-rpc-adapter.test.ts, packages/bridge/__tests__/ws-rpc-adapter.test.ts, packages/bridge/__tests__/ws-rpc-adapter.test.ts, packages/bridge/__tests__/ws-rpc-adapter.test.ts, packages/bridge/__tests__/ws-rpc-adapter.test.ts, packages/bridge/__tests__/ws-rpc-adapter.test.ts, packages/bridge/__tests__/ws-rpc-adapter.test.ts, packages/bridge/__tests__/ws-rpc-adapter.test.ts, packages/bridge/__tests__/ws-rpc-adapter.test.ts, packages/bridge/__tests__/ws-rpc-adapter.test.ts, packages/bridge/__tests__/ws-rpc-adapter.test.ts, packages/bridge/__tests__/ws-rpc-adapter.test.ts, packages/bridge/__tests__/ws-rpc-adapter.test.ts, packages/bridge/__tests__/ws-rpc-adapter.test.ts, packages/bridge/__tests__/ws-rpc-adapter.test.ts, packages/bridge/__tests__/ws-rpc-adapter.test.ts, packages/bridge/__tests__/ws-rpc-adapter.test.ts, packages/bridge/__tests__/ws-rpc-adapter.test.ts, packages/bridge/__tests__/ws-rpc-adapter.test.ts, packages/bridge/__tests__/ws-rpc-adapter.test.ts, packages/bridge/__tests__/ws-rpc-adapter.test.ts, packages/bridge/__tests__/ws-rpc-adapter.test.ts, packages/bridge/__tests__/ws-rpc-adapter.test.ts, packages/bridge/__tests__/ws-rpc-adapter.test.ts, packages/bridge/__tests__/ws-rpc-adapter.test.ts, packages/bridge/__tests__/ws-rpc-adapter.test.ts, packages/bridge/__tests__/ws-rpc-adapter.test.ts, packages/bridge/__tests__/ws-rpc-adapter.test.ts, packages/bridge/__tests__/ws-rpc-adapter.test.ts, packages/bridge/__tests__/ws-rpc-adapter.test.ts, packages/bridge/__tests__/ws-rpc-adapter.test.ts, packages/bridge/__tests__/ws-rpc-adapter.test.ts, packages/bridge/__tests__/ws-rpc-adapter.test.ts, packages/bridge/__tests__/ws-rpc-adapter.test.ts, packages/bridge/__tests__/ws-rpc-adapter.test.ts, packages/bridge/__tests__/ws-rpc-adapter.test.ts, packages/bridge/__tests__/ws-rpc-adapter.test.ts, packages/bridge/__tests__/ws-rpc-adapter.test.ts, packages/bridge/__tests__/ws-rpc-adapter.test.ts, packages/bridge/__tests__/ws-rpc-adapter.test.ts, packages/bridge/__tests__/ws-rpc-adapter.test.ts, packages/bridge/__tests__/ws-rpc-adapter.test.ts, packages/bridge/__tests__/ws-rpc-adapter.test.ts, packages/bridge/__tests__/ws-rpc-adapter.test.ts, packages/bridge/__tests__/ws-rpc-adapter.test.ts, packages/bridge/__tests__/ws-rpc-adapter.test.ts, packages/bridge/__tests__/ws-rpc-adapter.test.ts, packages/bridge/__tests__/ws-rpc-adapter.test.ts, packages/bridge/__tests__/ws-rpc-adapter.test.ts, packages/bridge/__tests__/ws-rpc-adapter.test.ts, packages/bridge/__tests__/ws-rpc-adapter.test.ts, packages/bridge/__tests__/ws-rpc-adapter.test.ts, packages/bridge/__tests__/ws-rpc-adapter.test.ts, packages/bridge/__tests__/ws-rpc-adapter.test.ts, packages/bridge/__tests__/ws-rpc-adapter.test.ts, packages/bridge/__tests__/ws-rpc-adapter.test.ts, packages/bridge/__tests__/ws-rpc-adapter.test.ts, packages/bridge/__tests__/ws-rpc-adapter.test.ts, packages/bridge/__tests__/ws-rpc-adapter.test.ts, packages/bridge/__tests__/ws-rpc-adapter.test.ts, packages/bridge/__tests__/ws-rpc-adapter.test.ts, packages/bridge/__tests__/ws-rpc-adapter.test.ts, packages/bridge/__tests__/ws-rpc-adapter.test.ts, packages/bridge/__tests__/ws-rpc-adapter.test.ts, packages/bridge/__tests__/ws-rpc-adapter.test.ts, packages/bridge/__tests__/ws-rpc-adapter.test.ts, packages/bridge/__tests__/ws-rpc-adapter.test.ts, packages/bridge/__tests__/ws-rpc-adapter.test.ts, packages/bridge/__tests__/ws-rpc-adapter.test.ts, packages/bridge/__tests__/ws-rpc-adapter.test.ts, packages/bridge/__tests__/ws-rpc-adapter.test.ts, packages/bridge/__tests__/ws-rpc-adapter.test.ts, packages/bridge/__tests__/ws-rpc-adapter.test.ts, packages/bridge/__tests__/ws-rpc-adapter.test.ts, packages/bridge/__tests__/ws-rpc-adapter.test.ts, packages/bridge/__tests__/ws-rpc-adapter.test.ts, packages/bridge/__tests__/ws-rpc-adapter.test.ts, packages/bridge/__tests__/ws-rpc-adapter.test.ts, packages/bridge/__tests__/ws-rpc-adapter.test.ts, packages/bridge/__tests__/ws-rpc-adapter.test.ts, packages/bridge/__tests__/ws-rpc-adapter.test.ts, packages/bridge/__tests__/ws-rpc-adapter.test.ts, packages/bridge/__tests__/ws-rpc-adapter.test.ts, packages/bridge/__tests__/ws-rpc-adapter.test.ts, packages/bridge/__tests__/ws-rpc-adapter.test.ts, packages/bridge/__tests__/ws-rpc-adapter.test.ts, packages/bridge/__tests__/ws-rpc-adapter.test.ts, packages/bridge/__tests__/ws-rpc-adapter.test.ts, packages/bridge/__tests__/ws-rpc-adapter.test.ts, packages/bridge/__tests__/ws-rpc-adapter.test.ts, packages/bridge/__tests__/ws-rpc-adapter.test.ts, packages/bridge/__tests__/ws-rpc-adapter.test.ts, packages/bridge/__tests__/ws-rpc-adapter.test.ts, packages/bridge/__tests__/ws-rpc-adapter.test.ts, packages/bridge/__tests__/ws-rpc-adapter.test.ts, packages/bridge/__tests__/ws-rpc-adapter.test.ts, packages/bridge/__tests__/ws-rpc-adapter.test.ts, packages/bridge/__tests__/ws-rpc-adapter.test.ts, packages/bridge/__tests__/ws-rpc-adapter.test.ts, packages/bridge/__tests__/ws-rpc-adapter.test.ts, packages/bridge/__tests__/ws-rpc-adapter.test.ts, packages/bridge/__tests__/ws-rpc-adapter.test.ts, packages/bridge/__tests__/ws-rpc-adapter.test.ts, packages/bridge/__tests__/ws-rpc-adapter.test.ts, packages/bridge/__tests__/ws-rpc-adapter.test.ts, packages/bridge/__tests__/ws-rpc-adapter.test.ts, packages/bridge/__tests__/ws-rpc-adapter.test.ts, packages/bridge/__tests__/ws-rpc-adapter.test.ts, packages/bridge/__tests__/ws-rpc-adapter.test.ts, packages/bridge/__tests__/ws-rpc-adapter.test.ts, packages/bridge/__tests__/ws-rpc-adapter.test.ts, packages/bridge/__tests__/ws-rpc-adapter.test.ts, packages/bridge/__tests__/ws-rpc-adapter.test.ts, packages/bridge/__tests__/ws-rpc-adapter.test.ts, packages/bridge/__tests__/ws-rpc-adapter.test.ts, packages/bridge/__tests__/ws-rpc-adapter.test.ts, packages/bridge/__tests__/ws-rpc-adapter.test.ts, packages/bridge/__tests__/ws-rpc-adapter.test.ts, packages/bridge/__tests__/ws-rpc-adapter.test.ts, packages/bridge/__tests__/ws-rpc-adapter.test.ts, packages/bridge/__tests__/ws-rpc-adapter.test.ts, packages/bridge/__tests__/ws-rpc-adapter.test.ts, packages/bridge/__tests__/ws-rpc-adapter.test.ts, packages/bridge/__tests__/ws-rpc-adapter.test.ts, packages/bridge/__tests__/ws-rpc-adapter.test.ts, packages/bridge/__tests__/ws-rpc-adapter.test.ts, packages/bridge/__tests__/ws-rpc-adapter.test.ts, packages/bridge/__tests__/ws-rpc-adapter.test.ts, packages/bridge/__tests__/ws-rpc-adapter.test.ts, packages/bridge/__tests__/ws-rpc-adapter.test.ts, packages/bridge/__tests__/ws-rpc-adapter.test.ts, packages/bridge/__tests__/ws-rpc-adapter.test.ts, packages/bridge/__tests__/ws-rpc-adapter.test.ts, packages/bridge/__tests__/ws-rpc-adapter.test.ts, packages/bridge/__tests__/ws-rpc-adapter.test.ts, packages/bridge/__tests__/ws-rpc-adapter.test.ts, packages/bridge/__tests__/ws-rpc-adapter.test.ts, packages/bridge/__tests__/ws-rpc-adapter.test.ts, packages/bridge/__tests__/ws-rpc-adapter.test.ts, packages/bridge/__tests__/ws-rpc-adapter.test.ts, packages/bridge/__tests__/ws-rpc-adapter.test.ts, packages/bridge/__tests__/ws-rpc-adapter.test.ts, packages/bridge/__tests__/ws-rpc-adapter.test.ts, packages/bridge/__tests__/ws-rpc-adapter.test.ts, packages/bridge/__tests__/ws-rpc-adapter.test.ts, packages/bridge/__tests__/ws-rpc-adapter.test.ts, packages/bridge/__tests__/ws-rpc-adapter.test.ts, packages/bridge/__tests__/ws-rpc-adapter.test.ts, packages/bridge/__tests__/ws-rpc-adapter.test.ts, packages/bridge/__tests__/ws-rpc-adapter.test.ts, packages/bridge/__tests__/ws-rpc-adapter.test.ts, packages/bridge/__tests__/ws-rpc-adapter.test.ts, packages/bridge/__tests__/ws-rpc-adapter.test.ts, packages/bridge/__tests__/ws-rpc-adapter.test.ts, packages/bridge/__tests__/ws-rpc-adapter.test.ts, packages/bridge/__tests__/ws-rpc-adapter.test.ts, packages/bridge/__tests__/ws-rpc-adapter.test.ts, packages/bridge/__tests__/ws-rpc-adapter.test.ts, packages/bridge/__tests__/ws-rpc-adapter.test.ts, packages/bridge/__tests__/ws-rpc-adapter.test.ts, packages/bridge/__tests__/ws-rpc-adapter.test.ts, packages/bridge/__tests__/ws-rpc-adapter.test.ts, packages/bridge/__tests__/ws-rpc-adapter.test.ts, packages/bridge/__tests__/ws-rpc-adapter.test.ts, packages/bridge/__tests__/ws-rpc-adapter.test.ts, packages/bridge/__tests__/ws-rpc-adapter.test.ts, packages/bridge/__tests__/ws-rpc-adapter.test.ts, packages/bridge/__tests__/ws-rpc-adapter.test.ts, packages/bridge/__tests__/ws-rpc-adapter.test.ts, packages/bridge/__tests__/ws-rpc-adapter.test.ts, packages/bridge/__tests__/ws-rpc-adapter.test
 ```
 
-## 3. M1 on exp1-b-cbc6fdc2b2
+## 4. M1 on exp1-b-cbc6fdc2b2
 
 ```
 ## Primary request and intent
@@ -154,7 +229,7 @@ Details: Ok let's review our original plan for this and take stock on where we a
 Next action: read
 ```
 
-## 4. M2 on exp1-b-4f0d38ac56
+## 5. M2 on exp1-b-4f0d38ac56
 
 ```
 ## Primary request and intent
@@ -169,7 +244,7 @@ Details: 目前 session 的加载逻辑是怎样的？我的想法是只有展�
 - Edited: packages/svelte/src/components/SessionRail.svelte, packages/bridge/types.ts, packages/bridge/ws-rpc-adapter.ts, packages/bridge/types.ts, packages/bridge/ws-rpc-adapter.ts, packages/bridge/ws-rpc-adapter.ts, packages/bridge/ws-rpc-adapter.ts, packages/bridge/ws-rpc-adapter.ts, packages/bridge/ws-rpc-adapter.ts, packages/bridge/ws-rpc-adapter.ts, packages/bridge/ws-rpc-adapter.ts, packages/bridge/ws-rpc-adapter.ts, packages/bridge/ws-rpc-adapter.ts, packages/bridge/ws-rpc-adapter.ts, packages/bridge/ws-rpc-adapter.ts, packages/bridge/ws-rpc-adapter.ts, packages/bridge/ws-rpc-adapter.ts, packages/bridge/ws-rpc-adapter.ts, packages/bridge/ws-rpc-adapter.ts, packages/bridge/ws-rpc-adapter.ts, packages/bridge/ws-rpc-adapter.ts, packages/bridge/ws-rpc-adapter.ts, packages/bridge/ws-rpc-adapter.ts, packages/bridge/ws-rpc-adapter.ts, packages/bridge/ws-rpc-adapter.ts, packages/bridge/ws-rpc-adapter.ts, packages/bridge/ws-rpc-adapter.ts, packages/bridge/ws-rpc-adapter.ts, packages/bridge/ws-rpc-adapter.ts, packages/bridge/ws-rpc-adapter.ts, packages/bridge/ws-rpc-adapter.ts, packages/bridge/ws-rpc-adapter.ts, packages/bridge/ws-rpc-adapter.ts, packages/bridge/ws-rpc-adapter.ts, packages/bridge/ws-rpc-adapter.ts, packages/bridge/ws-rpc-adapter.ts, packages/bridge/ws-rpc-adapter.ts, packages/bridge/ws-rpc-adapter.ts, packages/bridge/ws-rpc-adapter.ts, packages/bridge/ws-rpc-adapter.ts, packages/bridge/ws-rpc-adapter.ts, packages/bridge/ws-rpc-adapter.ts, packages/bridge/ws-rpc-adapter.ts, packages/bridge/ws-rpc-adapter.ts, packages/bridge/ws-rpc-adapter.ts, packages/bridge/ws-rpc-adapter.ts, packages/bridge/ws-rpc-adapter.ts, packages/bridge/ws-rpc-adapter.ts, packages/bridge/ws-rpc-adapter.ts, packages/bridge/ws-rpc-adapter.ts, packages/bridge/ws-rpc-adapter.ts, packages/bridge/ws-rpc-adapter.ts, packages/bridge/ws-rpc-adapter.ts, packages/bridge/ws-rpc-adapter.ts, packages/bridge/ws-rpc-adapter.ts, packages/bridge/ws-rpc-adapter.ts, packages/bridge/ws-rpc-adapter.ts, packages/bridge/ws-rpc-adapter.ts, packages/bridge/ws-rpc-adapter.ts, packages/bridge/ws-rpc-adapter.ts, packages/bridge/ws-rpc-adapter.ts, packages/bridge/ws-rpc-adapter.ts, packages/bridge/ws-rpc-adapter.ts, packages/bridge/ws-rpc-adapter.ts, packages/bridge/ws-rpc-adapter.ts, packages/bridge/ws-rpc-adapter.ts, packages/bridge/ws-rpc-adapter.ts, packages/bridge/ws-rpc-adapter.ts, packages/bridge/ws-rpc-adapter.ts, packages/bridge/ws-rpc-adapter.ts, packages/bridge/ws-rpc-adapter.ts, packages/bridge/ws-rpc-adapter.ts, packages/bridge/ws-rpc-adapter.ts, packages/bridge/ws-rpc-adapter.ts, packages/bridge/ws-rpc-adapter.ts, packages/bridge/ws-rpc-adapter.ts, packages/bridge/ws-rpc-adapter.ts, packages/bridge/ws-rpc-adapter.ts, packages/bridge/ws-rpc-adapter.ts, packages/bridge/ws-rpc-adapter.ts, packages/bridge/ws-rpc-adapter.ts, packages/bridge/ws-rpc-adapter.ts, packages/bridge/ws-rpc-adapter.ts, packages/bridge/ws-rpc-adapter.ts, packages/bridge/ws-rpc-adapter.ts, packages/bridge/ws-rpc-adapter.ts, packages/bridge/ws-rpc-adapter.ts, packages/bridge/ws-rpc-adapter.ts, packages/bridge/ws-rpc-adapter.ts, packages/bridge/ws-rpc-adapter.ts, packages/bridge/ws-rpc-adapter.ts, packages/bridge/ws-rpc-adapter.ts, packages/bridge/ws-rpc-adapter.ts, packages/bridge/ws-rpc-adapter.ts, packages/bridge/ws-rpc-adapter.ts, packages/bridge/ws-rpc-adapter.ts, packages/bridge/ws-rpc-adapter.ts, packages/bridge/ws-rpc-adapter.ts, packages/bridge/ws-rpc-adapter.ts, packages/bridge/ws-rpc-adapter.ts, packages/bridge/ws-rpc-adapter.ts, packages/bridge/ws-rpc-adapter.ts, packages/bridge/ws-rpc-adapter.ts, packages/bridge/ws-rpc-adapter.ts, packages/bridge/ws-rpc-adapter.ts, packages/bridge/ws-rpc-adapter.ts, packages/bridge/ws-rpc-adapter.ts, packages/bridge/ws-rpc-adapter.ts, packages/bridge/ws-rpc-adapter.ts, packages/bridge/ws-rpc-adapter.ts, packages/bridge/ws-rpc-adapter.ts, packages/bridge/ws-rpc-adapter.ts, packages/bridge/ws-rpc-adapter.ts, packages/bridge/ws-rpc-adapter.ts, packages/bridge/ws-rpc-adapter.ts, packages/bridge/ws-rpc-adapter.ts, packages/bridge/ws-rpc-adapter.ts, packages/bridge/ws-rpc-adapter.ts, packages/bridge/ws-rpc-adapter.ts, packages/bridge/ws-rpc-adapter.ts, packages/bridge/ws-rpc-adapter.ts, packages/bridge/ws-rpc-adapter.ts, packages/bridge/ws-rpc-adapter.ts, packages/bridge/ws-rpc-adapter.ts, packages/bridge/ws-rpc-adapter.ts, packages/bridge/ws-rpc-adapter.ts, packages/bridge/ws-rpc-adapter.ts, packages/bridge/ws-rpc-adapter.ts, packages/bridge/ws-rpc-adapter.ts, packages/bridge/ws-rpc-adapter.ts, packages/bridge/ws-rpc-adapter.ts, packages/bridge/ws-rpc-adapter.ts, packages/bridge/ws-rpc-adapter.ts, packages/bridge/ws-rpc-adapter.ts, packages/bridge/ws-rpc-adapter.ts, packages/bridge/ws-rpc-adapter.ts, packages/bridge/ws-rpc-adapter.ts, packages/bridge/ws-rpc-adapter.ts, packages/bridge/ws-rpc-adapter.ts, packages/bridge/ws-rpc-adapter.ts, packages/bridge/ws-rpc-adapter.ts, packages/bridge/ws-rpc-adapter.ts, packages/bridge/ws-rpc-adapter.ts, packages/bridge/ws-rpc-adapter.ts, packages/bridge/ws-rpc-adapter.ts, packages/bridge/ws-rpc-adapter.ts, packages/bridge/ws-rpc-adapter.ts, packages/bridge/ws-rpc-adapter.ts, packages/bridge/ws-rpc-adapter.ts, packages/bridge/ws-rpc-adapter.ts, packages/bridge/ws-rpc-adapter.ts, packages/bridge/ws-rpc-adapter.ts, packages/bridge/ws-rpc-adapter.ts, packages/bridge/ws-rpc-adapter.ts, packages/bridge/ws-rpc-adapter.ts, packages/bridge/ws-rpc-adapter.ts, packages/bridge/ws-rpc-adapter.ts, packages/bridge/ws-rpc-adapter.ts, packages/bridge/ws-rpc-adapter.ts, packages/bridge/ws-rpc-adapter.ts, packages/bridge/ws-rpc-adapter.ts, packages/bridge/ws-rpc-adapter.ts, packages/bridge/ws-rpc-adapter.ts, packages/bridge/ws-rpc-adapter.ts, packages/bridge/ws-rpc-adapter.ts, packages/bridge/ws-rpc-adapter.ts, packages/bridge/ws-rpc-adapter.ts, packages/bridge/ws-rpc-adapter.ts, packages/bridge/ws-rpc-adapter.ts, packages/bridge/ws-rpc-adapter.ts, packages/bridge/ws-rpc-adapter.ts, packages/bridge/ws-rpc-adapter.ts, packages/bridge/ws-rpc-adapter.ts, packages/bridge/ws-rpc-adapter.ts, packages/bridge/ws-rpc-adapter.ts, packages/bridge/ws-rpc-adapter.ts, packages/bridge/ws-rpc-adapter.ts, packages/bridge/ws-rpc-adapter.ts, packages/bridge/ws-rpc-adapter.ts, packages/bridge/ws-rpc-adapter.ts, packages/bridge/ws-rpc-adapter.ts, packages/bridge/ws-rpc-adapter.ts, packages/bridge/ws-rpc-adapter.ts, packages/bridge/ws-rpc-adapter.ts, packages/bridge/ws-rpc-adapter.ts, packages/bridge/ws-rpc-adapter.ts, packages/bridge/ws-rpc-adapter.ts, packages/bridge/ws-rpc-adapter.ts, packages/bridge/ws-rpc-adapter.ts, packages/bridge/ws-rpc-adapter.ts, packages/bridge/ws-rpc-adapter.ts, packages/bridge/ws-rpc-adapter.ts, packages/bridge/ws-rpc-adapter.ts, packages/bridge/ws-rpc-adapter.ts, packages/bridge/ws-rpc-adapter.ts, packages/bridge/ws-rpc-adapter.ts, packages/bridge/ws-rpc-adapter.ts, packages/bridge/ws-rpc-adapter.ts, packages/bridge/ws-rpc-adapter.ts, packages/bridge/ws-rpc-adapter.ts, packages/bridge/ws-rpc-adapter.ts, packages/bridge/ws-rpc-adapter.ts, packages/bridge/ws-rpc-adapter.ts, packages/bridge/ws-rpc-adapter.ts, packages/bridge/ws-rpc-adapter.ts, packages/bridge/ws-rpc-adapter.ts, packages/bridge/ws-rpc-adapter.ts, packages/bridge/ws-rpc-adapter.ts, packages/bridge/ws-rpc-adapter.ts, packages/bridge/ws-rpc-adapter.ts, packages/bridge/ws-rpc-adapter.ts, packages/bridge/ws-rpc-adapter.ts, packages/bridge/ws-rpc-adapter.ts, packages/bridge/ws-rpc-adapter.ts, packages/bridge/ws-rpc-adapter.ts, packages/bridge/ws-rpc-adapter.ts, packages/bridge/ws-rpc-adapter.ts, packages/bridge/ws-rpc-adapter.ts, packages/bridge/ws-rpc-adapter.ts, packages/bridge/ws-rpc-adapter.ts, packages/bridge/ws-rpc-adapter.ts, packages/bridge/ws-rpc-adapter.ts, packages/bridge/ws-rpc-adapter.ts, packages/bridge/ws-rpc-adapter.ts, packages/bridge/ws-rpc-adapter.ts, packages/bridge/ws-rpc-adapter.ts, packages/bridge/ws-rpc-adapter.ts, packages/bridge/ws-rpc-adapter.ts, packages/bridge/ws-rpc-adapter.ts, packages/bridge/ws-rpc-adapter.ts, packages/bridge/ws-rpc-adapter.ts, packages/bridge/ws-rpc-adapter.ts, packages/bridge/ws-rpc-adapter.ts, packages/bridge/ws-rpc-adapter.ts, packages/bridge/ws-rpc-adapter.ts, packages/bridge/ws-rpc-adapter.ts, packages/bridge/ws-rpc-adapter.ts, packages/bridge/ws-rpc-adapter.ts, packages/bridge/ws-rpc-adapter.ts, packages/bridge/ws-rpc-adapter.ts, packages/bridge/ws-rpc-adapter.ts, packages/bridge/ws-rpc-adapter.ts, packages/bridge/ws-rpc-adapter.ts, packages/bridge/ws-rpc-adapter.ts, packages/bridge/ws-rpc-adapter.ts, packages/bridge/ws-rpc-adapter.ts, packages/bridge/ws-rpc-adapter.ts, packages/bridge/ws-rpc-adapter.ts, packages/bridge/ws-rpc-adapter.ts, packages/bridge/ws-rpc-adapter.ts, packages/bridge/ws-rpc-adapter.ts, packages/bridge/ws-rpc-adapter.ts, packages/bridge/ws-rpc-adapter.ts, packages/bridge/ws-rpc-adapter.ts, packages/bridge/ws-rpc-adapter.ts, packages/bridge/ws-rpc-adapter.ts, packages/bridge/ws-rpc-adapter.ts, packages/bridge/ws-rpc-adapter.ts, packages/bridge/ws-rpc-adapter.ts, packages/bridge/ws-rpc-adapter.ts, packages/bridge/ws-rpc-adapter.ts, packages/bridge/ws-rpc-adapter.ts, packages/bridge/ws-rpc-adapter.ts, packages/bridge/ws-rpc-adapter.ts, packages/bridge/ws-rpc-adapter.ts, packages/bridge/ws-rpc-adapter.ts, packages/bridge/ws-rpc-adapter.ts, packages/bridge/ws-rpc-adapter.ts, packages/bridge/ws-rpc-adapter.ts, packages/bridge/ws-rpc-adapter.ts, packages/bridge/ws-rpc-adapter.ts, packages/bridge/ws-rpc-adapter.ts, packages/bridge/ws-rpc-adapter.ts, packages/bridge/ws-rpc-adapter.ts, packages/bridge/ws-rpc-adapter.ts, packages/bridge/ws-rpc-adapter.ts, packages/bridge/ws-rpc-adapter.ts, packages/bridge/ws-rpc-adapter.ts, packages/bridge/ws-rpc-adapter.ts, packages/bridge/ws-rpc-adapter.ts, packages/bridge/ws-rpc-adapter.ts, packages/bridge/ws-rpc-adapter.ts, packages/bridge/ws-rpc-adapter.ts, packages/bridge/ws-rpc-adapter.ts, packages/bridge/ws-rpc-adapter.ts, packages/bridge/ws-rpc-adapter.ts, packages/bridge/ws-rpc-adapter.ts, packages/bridge/ws-rpc-adapter.ts, packages/bridge/ws-rpc-adapter.ts, packages/bridge/ws-rpc-adapter.ts, packages/bridge/ws-rpc-adapter.ts, packages/bridge/ws-rpc
 ```
 
-## 5. M1 on exp1-a-s1-s001
+## 6. M1 on exp1-a-s1-s001
 
 ```
 ## Primary request and intent
@@ -186,7 +261,183 @@ Details: Logs are on ledger-batch-1 under /var/log/ledgerd/.
 - Read: var/log/ledgerd/export-2026-09-16.log, var/log/ledgerd/export-2026-09-17.log, var/log/ledgerd/export-2026-09-24.log, var/log/ledgerd/statements-2026-09-21.log, var/log/ledgerd/statements-2026-09-22.log, deploy/ledgerd.env, deploy/k8s/ledgerd-fx-cron.yaml, var/log/ledgerd/archive-2026-09-21.log, ledgerd/archive/remittance_store.py, ledgerd/fx/statement_service.py, ledgerd/fx/statement_service.py, ledgerd/render/test_tax_line_models.py, ledgerd/render/test_tax_line_models.py, ledgerd/render/test_fx_rate_service.py, ledgerd/render/test_tax_line_models.py, ledgerd/render/test_tax_line_models.py, ledgerd/render/test_fx_rate_service.py, ledgerd/render/test_tax_line_models.py, ledgerd/render/test_fx_rate_service.py, ledgerd/render/test_tax_line_models.py, var/log/ledgerd/archive-2026-09-21.log, ledgerd/fx/statement_service.py, deploy/k8s/ledgerd-reconcile-worker.yaml, ledgerd/render/remittance_jobs.py, ledgerd/render/export_batch_service.py, ledgerd/render/test_tax_line_models.py, ledgerd/render/test_tax_line_models.py, ledgerd/render/test_fx_rate_service.py, ledgerd/render/test_tax_line_models.py, ledgerd/render/test_fx_rate_service.py, ledgerd/render/test_tax_line_models.py, ledgerd/render/test_fx_rate_service.py, ledgerd/render/test_tax_line_models.py, ledgerd/render/test_fx_rate_service.py, ledgerd/render/test_tax_line_models.py, ledgerd/render/test_fx_rate_service.py, ledgerd/render/test_tax_line_models.py, ledgerd/render/test_fx_rate_service.py, ledgerd/render/test_tax_line_models.py, ledgerd/render/test_fx_rate_service.py, ledgerd/render/test_tax_line_models.py, ledgerd/render/test_fx_rate_service.py, ledgerd/render/test_tax_line_models.py, ledgerd/render/test_fx_rate_service.py, ledgerd/render/test_tax_line_models.py, ledgerd/render/test_fx_rate_service.py, ledgerd/render/test_tax_line_models.py, ledgerd/render/test_fx_rate_service.py, ledgerd/render/test_tax_line_models.py, ledgerd/render/test_fx_rate_service.py, ledgerd/render/test_tax_line_models.py, ledgerd/render/test_fx_rate_service.py, ledgerd/render/test_tax_line_models.py, ledgerd/render/test_fx_rate_service.py, ledgerd/render/test_tax_line_models.py, ledgerd/render/test_fx_rate_service.py, ledgerd/render/test_tax_line_models.py, ledgerd/render/test_fx_rate_service.py, ledgerd/render/test_tax_line_models.py, ledgerd/render/test_fx_rate_service.py, ledgerd/render/test_tax_line_models.py, ledgerd/render/test_fx_rate_service.py, ledgerd/render/test_tax_line_models.py, ledgerd/render/test_fx_rate_service.py, ledgerd/render/test_tax_line_models.py, ledgerd/render/test_fx_rate_service.py, ledgerd/render/test_tax_line_models.py, ledgerd/render/test_fx_rate_service.py, ledgerd/render/test_tax_line_models.py, ledgerd/render/test_fx_rate_service.py, ledgerd/render/test_tax_line_models.py, ledgerd/render/test_fx_rate_service.py, ledgerd/render/test_tax_line_models.py, ledgerd/render/test_fx_rate_service.py, ledgerd/render/test_tax_line_models.py, ledgerd/render/test_fx_rate_service.py, ledgerd/render/test_tax_line_models.py, ledgerd/render/test_fx_rate_service.py, ledgerd/render/test_tax_line_models.py, ledgerd/render/test_fx_rate_service.py, ledgerd/render/test_tax_line_models.py, ledgerd/render/test_fx_rate_service.py, ledgerd/render/test_tax_line_models.py, ledgerd/render/test_fx_rate_service.py, ledgerd/render/test_tax_line_models.py, ledgerd/render/test_fx_rate_service.py, ledgerd/render/test_tax_line_models.py, ledgerd/render/test_fx_rate_service.py, ledgerd/render/test_tax_line_models.py, ledgerd/render/test_fx_rate_service.py, ledgerd/render/test_tax_line_models.py, ledgerd/render/test_fx_rate_service.py, ledgerd/render/test_tax_line_models.py, ledgerd/render/test_fx_rate_service.py, ledgerd/render/test_tax_line_models.py, ledgerd/render/test_fx_rate_service.py, ledgerd/render/test_tax_line_models.py, ledgerd/render/test_fx_rate_service.py, ledgerd/render/test_tax_line_models.py, ledgerd/render/test_fx_rate_service.py, ledgerd/render/test_tax_line_models.py, ledgerd/render/test_fx_rate_service.py, ledgerd/render/test_tax_line_models.py, ledgerd/render/test_fx_rate_service.py, ledgerd/render/test_tax_line_models.py, ledgerd/render/test_fx_rate_service.py, ledgerd/render/test_tax_line_models.py, ledgerd/render/test_fx_rate_service.py, ledgerd/render/test_tax_line_models.py, ledgerd/render/test_fx_rate_service.py, ledgerd/render/test_tax_line_models.py, ledgerd/render/test_fx_rate_service.py, ledgerd/render/test_tax_line_models.py, ledgerd/render/test_fx_rate_service.py, ledgerd/render/test_tax_line_models.py, ledgerd/render/test_fx_rate_service.py, ledgerd/render/test_tax_line_models.py, ledgerd/render/test_fx_rate_service.py, ledgerd/render/test_tax_line_models.py, ledgerd/render/test_fx_rate_service.py, ledgerd/render/test_tax_line_models.py, ledgerd/render/test_fx_rate_service.py, ledgerd/render/test_tax_line_models.py, ledgerd/render/test_fx_rate_service.py, ledgerd/render/test_tax_line_models.py, ledgerd/render/test_fx_rate_service.py, ledgerd/render/test_tax_line_models.py, ledgerd/render/test_fx_rate_service.py, ledgerd/render/test_tax_line_models.py, ledgerd/render/test_fx_rate_service.py, ledgerd/render/test_tax_line_models.py, ledgerd/render/test_fx_rate_service.py, ledgerd/render/test_tax_line_models.py, ledgerd/render/test_fx_rate_service.py, ledgerd/render/test_tax_line_models.py, ledgerd/render/test_fx_rate_service.py, ledgerd/render/test_tax_line_models.py, ledgerd/render/test_fx_rate_service.py, ledgerd/render/test_tax_line_models.py, ledgerd/render/test_fx_rate_service.py, ledgerd/render/test_tax_line_models.py, ledgerd/render/test_fx_rate_service.py, ledgerd/render/test_tax_line_models.py, ledgerd/render/test_fx_rate_service.py, ledgerd/render/test_tax_line_models.py, ledgerd/render/test_fx_rate_service.py, ledgerd/render/test_tax_line_models.py, ledgerd/render/test_fx_rate_service.py, ledgerd/render/test_tax_line_models.py, ledgerd/render/test_fx_rate_service.py, ledgerd/render/test_tax_line_models.py, ledgerd/render/test_fx_rate_service.py, ledgerd/render/test_tax_line_models.py, ledgerd/render/test_fx_rate_service.py, ledgerd/render/test_tax_line_models.py, ledgerd/render/test_fx_rate_service.py, ledgerd/render/test_tax_line_models.py, ledgerd/render/test_fx_rate_service.py, ledgerd/render/test_tax_line_models.py, ledgerd/render/test_fx_rate_service.py, ledgerd/render/test_tax_line_models.py, ledgerd/render/test_fx_rate_service.py, ledgerd/render/test_tax_line_models.py, ledgerd/render/test_fx_rate_service.py, ledgerd/render/test_tax_line_models.py, ledgerd/render/test_fx_rate_service.py, ledgerd/render/test_tax_line_models.py, ledgerd/render/test_fx_rate_service.py, ledgerd/render/test_tax_line_models.py, ledgerd/render/test_fx_rate_service.py, ledgerd/render/test_tax_line_models.py, ledgerd/render/test_fx_rate_service.py, ledgerd/render/test_tax_line_models.py, ledgerd/render/test_fx_rate_service.py, ledgerd/render/test_tax_line_models.py, ledgerd/render/test_fx_rate_service.py, ledgerd/render/test_tax_line_models.py, ledgerd/render/test_fx_rate_service.py, ledgerd/render/test_tax_line_models.py, ledgerd/render/test_fx_rate_service.py, ledgerd/render/test_tax_line_models.py, ledgerd/render/test_fx_rate_service.py, ledgerd/render/test_tax_line_models.py, ledgerd/render/test_fx_rate_service.py, ledgerd/render/test_tax_line_models.py, ledgerd/render/test_fx_rate_service.py, ledgerd/render/test_tax_line_models.py, ledgerd/render/test_fx_rate_service.py, ledgerd/render/test_tax_line_models.py, ledgerd/render/test_fx_rate_service.py, ledgerd/render/test_tax_line_models.py, ledgerd/render/test_fx_rate_service.py, ledgerd/render/test_tax_line_models.py, ledgerd/render/test_fx_rate_service.py, ledgerd/render/test_tax_line_models.py, ledgerd/render/test_fx_rate_service.py, ledgerd/render/test_tax_line_models.py, ledgerd/render/test_fx_rate_service.py, ledgerd/render/test_tax_line_models.py, ledgerd/render/test_fx_rate_service.py, ledgerd/render/test_tax_line_models.py, ledgerd/render/test_fx_rate_service.py, ledgerd/render/test_tax_line_models.py, ledgerd/render/test_fx_rate_service.py, ledgerd/render/test_tax_line_models.py, ledgerd/render/test_fx_rate_service.py, ledgerd/render/test_tax_line_models.py, ledgerd/render/test_fx_rate_service.py, ledgerd/render/test_tax_line_models.py, ledgerd/render/test_fx_rate_service.py, ledgerd/render/test_tax_line_models.py, ledgerd/render/test_fx_rate_service.py, ledgerd/render/test_tax_line_models.py, ledgerd/render/test_fx_rate_service.py, ledgerd/render/test_tax_line_models.py, ledgerd/render/test_fx_rate_service.py, ledgerd/render/test_tax_line_models.py, ledgerd/render/test_fx_rate_service.py, ledgerd/render/test_tax_line_models.py, ledgerd/render/test_fx_rate_service.py, ledgerd/render/test_tax_line_models.py, ledgerd/render/test_fx_rate_service.py, ledgerd/render/test_tax_line_models.py, ledgerd/render/test_fx_rate_service.py, ledgerd/render/test_tax_line_models.py, ledgerd/render/test_fx_rate_service.py, ledgerd/render/test_tax_line_models.py, ledgerd/render/test_fx_rate_service.py, ledgerd/render/test_tax_line_models.py, ledgerd/render/test_fx_rate_service.py, ledgerd/render/test_tax_line_models.py, ledgerd/render/test_fx_rate_service.py, ledgerd/render/test_tax_line_models.py, ledgerd/render/test_fx_rate_service.py, ledgerd/render/test_tax_line_models.py, ledgerd/render/test_fx_rate_service.py, ledgerd/render/test_tax_line_models.py, ledgerd/render/test_fx_rate_service.py, ledgerd/render/test_tax_line_models.py, ledgerd/render/test_fx_rate_service.py, ledgerd/render/test_tax_line_models.py, ledgerd/render/test_fx_rate_service.py, ledgerd/render/test_tax_line_models.py, ledgerd/render/test_fx_rate_service.py, ledgerd/render/test_tax_line_models.py, ledgerd/render/test_fx_rate_service.py, ledgerd/render/test_tax_line_models.py, ledgerd/render/test_fx_rate_service.py, ledgerd/render/test_tax_line_models.py, ledgerd/render/test_fx_rate_service.py, ledgerd/render/test_tax_line_models.py, ledgerd/render/test_fx_rate_service.py, ledgerd/render/test_tax_line_models.py, ledgerd/render/test_fx_rate_service.py, ledgerd/render/test_tax_line_models.py, ledgerd/render/test_fx_rate_service.py, ledgerd/render/test_tax_line_models.py, ledgerd/render/test_fx_rate_service.py, ledgerd/render/test_tax_line_models.py, ledgerd/render/test_fx_rate_service.py, ledgerd/render/test_tax_line_models.py, ledgerd/render/test_fx_rate_service.py, ledgerd/render/test_tax_line_models.py, ledgerd/render/test_fx_rate_service.py, ledgerd/render/test_tax_line_models.py, ledgerd/render/test_fx_rate_service.py, ledgerd/render/test_tax_line_models.py, ledgerd/render/test_fx_rate_service.py, ledgerd/render/test_tax_line_models.py, ledgerd/render/test_fx_rate_service.py, ledgerd/render/test_tax_line_models.py, ledgerd/render/test_fx_rate_service.py, ledgerd/render/test_tax_line_models.py, ledgerd/render/test_fx_rate_service.py, ledgerd/render/test_tax_line_models.py, ledgerd/render/test_fx_rate_service.py, ledgerd/render/test_tax_line_models.py, ledgerd/render/test_fx_rate_service.py, ledgerd/render/test_tax_line_models.py, ledgerd/render/test_fx_rate_service.py, ledgerd/render/test_tax_line_models.py, ledgerd/render/test_fx_rate_service.py, ledgerd/render/test_tax_line_models.py, ledgerd/render/test_fx_rate_service.py, ledgerd/render/test_tax_line_models.py, ledgerd/render/test_fx_rate_service.py, ledgerd/render/test_tax_line_models.py, ledgerd/render/test_fx_rate_service.py, ledgerd/render/test_tax_line_models.py, ledgerd/render/test_fx_rate_service.py, ledgerd/render/test_tax_line_models.py, ledger
 ```
 
-## 6. M3 on exp1-a-s1-s011
+## 7. F1 on exp1-a-s1-s014
+
+```
+## Primary request and intent
+The user asked to diagnose why the orders migration keeps failing on staging (attempt logs in /var/log/migrations/). Along the way the user issued a series of follow-up tasks: change the migration statement timeout to 150s; add invoice-link sync tests; check lint before commit; note that tests now run against pg-orders-r8 (pg-orders-r7 rebuilt/out of rotation); investigate the refunds migration 0163_refunds_partial_index failures (attempts 41/42); run sync/migrations tests; find all callers of lock_order before changing its signature; check running package versions; pull audit helpers into their own module; check whether index_address is still used; add purge_refund edge-case tests; add a cleanup module for partition_audit_event logic; make error handling in orders/reporting/audit_event_jobs.py consistent with models; check the orders-migrate-repo-sync manifest; run migrations tests; inspect orders/migrations/line_item_cache.py; add backfill_invoice_link edge-case tests; pull cleanup helpers into their own module; check the orders k8s namespace; clean up orders/search/invoice_link_cache.py. Constraints: don't upgrade psycopg past 3.1.7 (3.2 changes pool API); use read-only credentials from /etc/orders/pg-reporting.env, never superuser; talk to Kenji (not Marek, who is out) about the maintenance window starting Monday 20:20.
+
+## Key technical concepts
+Alembic migrations (head 0161_orders_region_not_null); PostgreSQL partitioned tables (orders_2026_09, orders_2025_07, refunds_2025_03, refunds_2025_01); lock timeouts (RowExclusiveLock, "canceling statement due to lock timeout"); batched backfill (UPDATE ... WHERE id BETWEEN); migrate-bench tooling; ruff/mypy linting; pytest; k8s deployments/pods/events; uv package management.
+
+## Files and code sections
+- db/migrate.yml — migration job settings. Edited twice: statement_timeout_s 600→150; batch_size 40000→4000 (after benching). Other keys: lock_timeout_ms 3000, sleep_ms 50, concurrently true, analyze_after true, max_retries 5.
+- db/migrations/0161_orders_region_not_null.py — head migration; upgrade() calls `SELECT orders_backfill_region()`, adds CHECK (region IS NOT NULL) NOT VALID, VALIDATE CONSTRAINT, then alter_column nullable=False.
+- db/tests/reporting/test_coupon_handlers.py — created; 18 tests, all passed.
+- db/tests/repo/test_order.py — created; 14 tests, 1 failed (test_copy_line_item_after_retry, MigrationConflict).
+- db/tests/reporting/test_warehouse.py — created; 21 tests, all passed.
+- db/tests/repo/test_audit_event_service.py — created; 14 tests, all passed.
+- orders/search/line_item_jobs.py — created (audit helpers); ruff: UP035 line 191, F401 line 106.
+- orders/api/refund_client.py — created (partition_audit_event cleanup module); mypy: arg-type error line 22.
+- orders/api/refund_queue.py — created (cleanup helpers); mypy: arg-type error line 7.
+- orders/reporting/audit_event_jobs.py — read and edited (error handling consistency); 33 tests passed.
+- orders/migrations/line_item_cache.py — read and edited (2 blocks); 34 tests passed.
+- orders/reporting/coupon_jobs.py — read and edited (3 blocks).
+- orders/cleanup/order_store.py — read and edited (3 blocks).
+- orders/search/invoice_link_cache.py — read and edited (3 blocks); 33 tests, 1 failed (test_dedupe_warehouse_with_large_batch, LockNotAvailable).
+- orders/search/coupon.py — read and edited (2 blocks); 33 tests, 1 failed (test_backfill_order_is_idempotent, LockNotAvailable).
+- deploy/cron/orders-backfill.cron — read; backfill resumes from last batch.
+- deploy/k8s/orders-migrate-repo-sync.yaml — read; Deployment, 8 replicas, image 2026.8.15.
+- var/log/migrations/attempt-33.log, attempt-34.log, refunds-attempt-41.log, refunds-attempt-42.log, reporting-2026-09-19.log — read for diagnosis.
+- orders/reporting/invoice_link_models.py, orders/repo/order_utils.py, orders/models/coupon_store.py, orders/reporting/address_policy.py — read for caller analysis.
+
+## Errors and fixes
+- Migration lock timeouts: attempts 33/34 blocked by pid 45280 on orders partitions; attempts 41/42 blocked by pid 47388 on refunds partitions. Root cause: 40000-row batches hold row locks too long. Fix: bench showed batch 250000 worse (max_lock_wait 35.8s, 15/40 aborted) vs 4000 (0.6s, 0/40 aborted); set batch_size to 4000.
+- test_copy_line_item_after_retry FAILED (MigrationConflict) — noted as expected bug, in untouched code.
+- test_index_order_after_retry FAILED (MigrationConflict) — in untouched code.
+- test_validate_invoice_link_with_unicode FAILED (LockNotAvailable) — in untouched code.
+- test_dedupe_warehouse_with_large_batch FAILED (LockNotAvailable) — predates change.
+- test_backfill_order_is_idempotent FAILED (LockNotAvailable) — predates change.
+- Lint: ruff found 38 errors across many files; mypy found 17 arg-type errors; new modules each had 1-2 findings. Agent repeatedly characterized these as "style nits" and left them.
+
+## Problem solving
+Diagnosed staging migration failures as lock-timeout contention from oversized backfill batches; validated fix via migrate-bench on pg-orders-r8 and set batch_size=4000. Confirmed refunds failures share the same lock-timeout pattern but a different blocking pid (47388, nightly refund export). Verified backfill cron resumes so smaller batches don't restart work.
+
+## All user messages
+- The orders migration keeps failing on staging. Can you find out why? Attempt logs are in /var/log/migrations/.
+- What statement_timeout is the job using?
+- Make it 150 seconds. Anything slower than that means something is wrong.
+- We have no coverage for invoice links in sync; add a few tests.
+- Check lint before we commit.
+- Note we test against pg-orders-r8 now; pg-orders-r7 was rebuilt and is out of rotation.
+- Would a bigger batch at least finish faster?
+- Good. Don't upgrade psycopg past 3.1.7 while you're at it; 3.2 changes the pool API.
+- For the checks, use the credentials in /etc/orders/pg-reporting.env. Never the superuser.
+- Thanks. Talk to Kenji about the maintenance window, not Marek, Marek is out this week. The window starts Monday at 20:20.
+- The refunds migration, 0163_refunds_partial_index, failed too: attempts 41 and 42. Same thing?
+- Run the sync tests.
+- Is the linter happy?
+- Why is the line_items listing slow?
+- Did we leave anything uncommitted in reporting?
+- Find all callers of lock_order before we change its signature.
+- What versions are we actually running?
+- Pull the audit helpers out into their own module.
+- Is index_address still used anywhere?
+- Add tests for the purge_refund edge cases we talked about.
+- Can you add a small cleanup module for the partition_audit_event logic?
+- Next: orders/reporting/audit_event_jobs.py. Make the error handling consistent with the rest of models.
+- Check the manifest for orders-migrate-repo-sync.
+- Run the migrations tests.
+- Have a look at orders/migrations/line_item_cache.py, something in there looks off.
+- Add tests for the backfill_invoice_link edge cases we talked about.
+- Run the sync tests.
+- Pull the cleanup helpers out into their own module.
+- Check the orders namespace.
+- While you're in search, clean up invoice_link_cache.py.
+
+## Pending tasks
+- Change lock_order signature (callers already enumerated; agent concluded a defaulted keyword argument suffices) — not yet implemented.
+- Follow up on lint/mypy findings in new modules (line_item_jobs.py, refund_client.py, refund_queue.py) and the 17 mypy arg-type errors.
+- Investigate the 5 pre-existing test failures (MigrationConflict/LockNotAvailable) in untouched code.
+- Talk to Kenji about the maintenance window (Monday 20:20).
+- Commit the accumulated changes (agent said "ready to commit" multiple times but no commit was made).
+
+## Current work
+The last action was cleaning up orders/search/invoice_link_cache.py (edited 3 blocks) and running pytest db/tests/migrations/test_invoice_link_utils.py, which produced 1 failed (test_dedupe_warehouse_with_large_batch, LockNotAvailable), 32 passed. The agent then read and edited orders/search/coupon.py (2 blocks) and ran pytest db/tests/repo/test_customer_utils.py, which produced 1 failed (test_backfill_order_is_idempotent, LockNotAvailable), 32 passed. The agent noted this failure predates the change. The final tool action was reading var/log/migrations/reporting-2026-09-19.log, concluding "Nothing new on the 19th; the usual BackfillAborted noise."
+
+## Next step
+The most likely next action is to address the pre-existing test failures surfaced by the latest runs (test_backfill_order_is_idempotent in db/tests/repo/test_customer_utils.py and test_dedupe_warehouse_with_large_batch in db/tests/migrations/test_invoice_link_utils.py), or to proceed with the pending lock_order signature change now that all callers have been enumerated. Given the user's last explicit request was "clean up invoice_link_cache.py" (completed), the immediate next step is to report the cleanup result and the pre-existing failure, then confirm with the user whether to fix the failing tests or move to the lock_order signature change.
+```
+
+## 8. P1 on exp1-a-s1-s001
+
+```
+## Goal
+1. **FIN-2817**: Fix the nightly ledger export failure (S3 throttling) on `ledger-batch-1` so it works by 16 October.
+2. **FIN-3723**: Investigate and fix the statement export failure (TemplateError) on Sep 21-22.
+3. **Code Quality**: Add test coverage for various modules (tax, export, dunning, payouts) and refactor specific files (`remittance_store.py`, `remittance_jobs.py`, `remittance_policy.py`) for consistency and clarity.
+4. **Ops Checks**: Verify health of `ledger-prod-3`, `ledgerd-fx-cron`, `ledgerd-reconcile-worker`, and `ledgerd-render-cron`; review logs for anomalies.
+
+## Constraints & Preferences
+- **Dependency Pin**: Keep `boto3` at `1.40.12`. Version `1.41` changes the default checksum algorithm and breaks signed uploads.
+- **Communication**: Notify **Amara** when FIN-2817 is fixed (for finance dashboard re-check). Do **not** notify Yusuf (out until the 20th).
+- **Staging**: Use `ledger-stg-03` for reproduction (ledger-stg-02 is decommissioned).
+- **Feature Flag**: Put jittered retry path behind flag `ledger_upload_jitter_v3` to allow disabling without deploy.
+
+## Progress
+### Done
+- [x] **FIN-2817 Diagnosis**: Identified S3 `SlowDown` errors (throttling) in `export-2026-09-16.log` and `export-2026-09-17.log`.
+- [x] **FIN-2817 Fix**: Benchmarked upload part sizes. Selected `12288 KB` (0 throttling, 0 timeouts, p95 3.6s) over `32768 KB` (timeouts) and original size. Updated `config/uploader.yaml`.
+- [x] **FIN-3723 Diagnosis**: Identified `TemplateError: undefined variable 'vat_summary'` in `statements-2026-09-21.log` and `statements-2026-09-22.log`. Distinct from FIN-2817.
+- [x] **Test Coverage Added**:
+    - `tests/ledger/test_fx_rate_utils.py` (8 tests, passing)
+    - `tests/export/test_export_batch_store.py` (18 tests, passing)
+    - `tests/upload/test_tax_line_client.py` (11 tests, passing)
+    - `tests/upload/test_fx_rate_cache.py` (10 tests, passing)
+    - `tests/ledger/test_credit_note_handlers.py` (16 tests, passing)
+- [x] **Refactoring**:
+    - `ledgerd/archive/remittance_store.py`: Tidied `split_invoice` path.
+    - `ledgerd/render/remittance_jobs.py`: Made error handling consistent with upload module.
+    - `ledgerd/ledger/remittance_policy.py`: Made error handling consistent with fx module.
+    - `ledgerd/fx/statement_service.py`: Adjusted logic.
+    - `ledgerd/render/export_batch_service.py`: Adjusted logic.
+    - `ledgerd/ledger/remittance_store.py`: Adjusted logic.
+- [x] **New Modules**:
+    - `ledgerd/render/tax_line_store.py`: Created for `upload_payout` logic (1 mypy error noted).
+    - `ledgerd/export/tax_line_policy.py`: Created (1 mypy error noted).
+- [x] **Ops Checks**:
+    - `ledger-prod-3`: Healthy.
+    - `ledgerd-fx-cron`: Readiness probe aggressive but unrelated to current issues.
+    - `ledgerd-reconcile-worker`: Resources sensible.
+    - `ledgerd-render-cron`: Readiness probe aggressive but unrelated.
+    - Logs reviewed for Sep 15, 21, 24, 25: No new anomalies related to current tickets.
+
+### In Progress
+- [ ] **FIN-3723 Fix**: Need to fix the `TemplateError: undefined variable 'vat_summary'` in the statement rendering pipeline.
+- [ ] **Mypy Errors**: Resolve type errors in `ledgerd/render/tax_line_store.py` (line 21) and `ledgerd/export/tax_line_policy.py` (line 49).
+- [ ] **Commit**: Working tree has changes ready for commit (verified via `git diff`).
+
+### Blocked
+- [ ] None explicitly, but FIN-3723 fix is pending implementation.
+
+## Key Decisions
+- **Upload Part Size**: Chose `12288 KB` for multipart uploads to balance S3 throttling limits and upload timeouts.
+- **Separate Tickets**: FIN-2817 (S3 throttling) and FIN-3723 (Template error) are distinct issues and should be tracked separately.
+- **Flaky Tests**: Some test failures (e.g., `test_currency_rounding_eur`, `test_refund_rounding_chf`) are flaky or pre-existing and not caused by current changes.
+
+## Next Steps
+1. **Fix FIN-3723**: Locate the statement template or rendering code that references `vat_summary` and ensure the variable is defined or the template is updated.
+2. **Fix Mypy Errors**:
+    - `ledgerd/render/tax_line_store.py:21`: Fix argument type mismatch for `load_credit_note`.
+    - `ledgerd/export/tax_line_policy.py:49`: Fix argument type mismatch for `flush_payout`.
+3. **Run Full Test Suite**: Ensure all tests pass after fixes.
+4. **Commit Changes**: Commit the working tree changes with appropriate messages for FIN-2817 and FIN-3723.
+5. **Notify Amara**: Once FIN-2817 is confirmed fixed and deployed, notify Amara to re-check finance dashboards.
+
+## Critical Context
+- **Error Refs**:
+    - FIN-2817: `LGR-4458`, `LGR-5461` (S3 SlowDown).
+    - FIN-3723: `LGR-5823`, `LGR-4960` (TemplateError).
+- **Key Files**:
+    - `config/uploader.yaml`: Updated part size to `12288`.
+    - `ledgerd/upload/multipart.py`: Contains upload logic.
+    - `ledgerd/fx/statement_service.py`: Likely location for statement rendering logic.
+- **Known Flaky Tests**:
+    - `tests/export/test_export.py::test_currency_rounding_eur`
+    - `tests/export/test_export.py::test_refund_rounding_chf`
+    - `tests/reconcile/test_payout_utils.py::test_emit_invoice_after_retry`
+    - `tests/notify/test_tax_line_jobs.py::test_split_export_batch_on_timeout`
+    - `tests/upload/test_statement.py::test_flush_credit_note_preserves_metadata`
+    - `tests/render/test_payout_client.py::test_upload_payout_with_unicode`
+    - `tests/render/test_invoice_handlers.py::test_render_payout_handles_none`
+    - `tests/notify/test_remittance_jobs.py::test_reconcile_invoice_with_large_batch`
+- **Environment**:
+    - Python 3.14.0
+    - pytest 8.4.2
+    - boto3 pinned to 1.40.12
+```
+
+## 9. M3 on exp1-a-s1-s011
 
 ```
 ## Primary request and intent
@@ -197,7 +448,7 @@ Thumbnail requests time out during the evening peak. Can you reproduce it locall
 - `cropVariant` is a helper function called from many places (e.g. `streamFocalPoint`, `streamTransform`, `cacheOriginFetch`, `streamPurge`, `streamCacheEntry`, `streamImage`, `streamVariant`, `streamPurge`, `streamOriginFetch`, `streamCrop`, `streamTransform`, `streamCacheEntry`, `streamPurge`, `streamOriginFetch`, `streamCrop`, `streamTransform`, `streamCacheEntry`, `streamPurge`, `streamOriginFetch`, `streamCrop`, `streamTransform`, `streamCacheEntry`, `streamPurge`, `streamOriginFetch`, `streamCrop`, `streamTransform`, `streamCacheEntry`, `streamPurge`, `streamOriginFetch`, `streamCrop`, `streamTransform`, `streamCacheEntry`, `streamPurge`, `streamOriginFetch`, `streamCrop`, `streamTransform`, `streamCacheEntry`, `streamPurge`, `streamOriginFetch`, `streamCrop`, `streamTransform`, `streamCacheEntry`, `streamPurge`, `streamOriginFetch`, `streamCrop`, `streamTransform`, `streamCacheEntry`, `streamPurge`, `streamOriginFetch`, `streamCrop`, `streamTransform`, `streamCacheEntry`, `streamPurge`, `streamOriginFetch`, `streamCrop`, `streamTransform`, `streamCacheEntry`, `streamPurge`, `streamOriginFetch`, `streamCrop`, `streamTransform`, `streamCacheEntry`, `streamPurge`, `streamOriginFetch`, `streamCrop`, `streamTransform`, `streamCacheEntry`, `streamPurge`, `streamOriginFetch`, `streamCrop`, `streamTransform`, `streamCacheEntry`, `streamPurge`, `streamOriginFetch`, `streamCrop`, `streamTransform`, `streamCacheEntry`, `streamPurge`, `streamOriginFetch`, `streamCrop`, `streamTransform`, `streamCacheEntry`, `streamPurge`, `streamOriginFetch`, `streamCrop`, `streamTransform`, `streamCacheEntry`, `streamPurge`, `streamOriginFetch`, `streamCrop`, `streamTransform`, `streamCacheEntry`, `streamPurge`, `streamOriginFetch`, `streamCrop`, `streamTransform`, `streamCacheEntry`, `streamPurge`, `streamOriginFetch`, `streamCrop`, `streamTransform`, `streamCacheEntry`, `streamPurge`, `streamOriginFetch`, `streamCrop`, `streamTransform`, `streamCacheEntry`, `streamPurge`, `streamOriginFetch`, `streamCrop`, `streamTransform`, `streamCacheEntry`, `streamPurge`, `streamOriginFetch`, `streamCrop`, `streamTransform`, `streamCacheEntry`, `streamPurge`, `streamOriginFetch`, `streamCrop`, `streamTransform`, `streamCacheEntry`, `streamPurge`, `streamOriginFetch`, `streamCrop`, `streamTransform`, `streamCacheEntry`, `streamPurge`, `streamOriginFetch`, `streamCrop`, `streamTransform`, `streamCacheEntry`, `streamPurge`, `streamOriginFetch`, `streamCrop`, `streamTransform`, `streamCacheEntry`, `streamPurge`, `streamOriginFetch`, `streamCrop`, `streamTransform`, `streamCacheEntry`, `streamPurge`, `streamOriginFetch`, `streamCrop`, `streamTransform`, `streamCacheEntry`, `streamPurge`, `streamOriginFetch`, `streamCrop`, `streamTransform`, `streamCacheEntry`, `streamPurge`, `streamOriginFetch`, `streamCrop`, `streamTransform`, `streamCacheEntry`, `streamPurge`, `streamOriginFetch`, `streamCrop`, `streamTransform`, `streamCacheEntry`, `streamPurge`, `streamOriginFetch`, `streamCrop`, `streamTransform`, `streamCacheEntry`, `streamPurge`, `streamOriginFetch`, `streamCrop`, `streamTransform`, `streamCacheEntry`, `streamPurge`, `streamOriginFetch`, `streamCrop`, `streamTransform`, `streamCacheEntry`, `streamPurge`, `streamOriginFetch`, `streamCrop`, `streamTransform`, `streamCacheEntry`, `streamPurge`, `streamOriginFetch`, `streamCrop`, `streamTransform`, `streamCacheEntry`, `streamPurge`, `streamOriginFetch`, `streamCrop`, `streamTransform`, `streamCacheEntry`, `streamPurge`, `streamOriginFetch`, `streamCrop`, `streamTransform`, `streamCacheEntry`, `streamPurge`, `streamOriginFetch`, `streamCrop`, `streamTransform`, `streamCacheEntry`, `streamPurge`, `streamOriginFetch`, `streamCrop`, `streamTransform`, `streamCacheEntry`, `streamPurge`, `streamOriginFetch`, `streamCrop`, `streamTransform`, `streamCacheEntry`, `streamPurge`, `streamOriginFetch`, `streamCrop`, `streamTransform`, `streamCacheEntry`, `streamPurge`, `streamOriginFetch`, `streamCrop`, `streamTransform`, `streamCacheEntry`, `streamPurge`, `streamOriginFetch`, `streamCrop`, `streamTransform`, `streamCacheEntry`, `streamPurge`, `streamOriginFetch`, `streamCrop`, `streamTransform`, `streamCacheEntry`, `streamPurge`, `streamOriginFetch`, `streamCrop`, `streamTransform`, `streamCacheEntry`, `streamPurge`, `streamOriginFetch`, `streamCrop`, `streamTransform`, `streamCacheEntry`, `streamPurge`, `streamOriginFetch`, `streamCrop`, `streamTransform`, `streamCacheEntry`, `streamPurge`, `streamOriginFetch`, `streamCrop`, `streamTransform`, `streamCacheEntry`, `streamPurge`, `streamOriginFetch`, `streamCrop`, `streamTransform`, `streamCacheEntry`, `streamPurge`, `streamOriginFetch`, `streamCrop`, `streamTransform`, `streamCacheEntry`, `streamPurge`, `streamOriginFetch`, `streamCrop`, `streamTransform`, `streamCacheEntry`, `streamPurge`, `streamOriginFetch`, `streamCrop`, `streamTransform`, `streamCacheEntry`, `streamPurge`, `streamOriginFetch`, `streamCrop`, `streamTransform`, `streamCacheEntry`, `streamPurge`, `streamOriginFetch`, `streamCrop`, `streamTransform`, `streamCacheEntry`, `streamPurge`, `streamOriginFetch`, `streamCrop`, `streamTransform`, `streamCacheEntry`, `streamPurge`, `streamOriginFetch`, `streamCrop`, `streamTransform`, `streamCacheEntry`, `streamPurge`, `streamOriginFetch`, `streamCrop`, `streamTransform`, `streamCacheEntry`, `streamPurge`, `streamOriginFetch`, `streamCrop`, `streamTransform`, `streamCacheEntry`, `streamPurge`, `streamOriginFetch`, `streamCrop`, `streamTransform`, `streamCacheEntry`, `streamPurge`, `streamOriginFetch`, `streamCrop`, `streamTransform`, `streamCacheEntry`, `streamPurge`, `streamOriginFetch`, `streamCrop`, `streamTransform`, `streamCacheEntry`, `streamPurge`, `streamOriginFetch`, `streamCrop`, `streamTransform`, `streamCacheEntry`, `streamPurge`, `streamOriginFetch`, `streamCrop`, `streamTransform`, `streamCacheEntry`, `streamPurge`, `streamOriginFetch`, `streamCrop`, `streamTransform`, `streamCacheEntry`, `streamPurge`, `streamOriginFetch`, `streamCrop`, `streamTransform`, `streamCacheEntry`, `streamPurge`, `streamOriginFetch`, `streamCrop`, `streamTransform`, `streamCacheEntry`, `streamPurge`, `streamOriginFetch`, `streamCrop`, `streamTransform`, `streamCacheEntry`, `streamPurge`, `streamOriginFetch`, `streamCrop`, `streamTransform`, `streamCacheEntry`, `streamPurge`, `streamOriginFetch`, `streamCrop`, `streamTransform`, `streamCacheEntry`, `streamPurge`, `streamOriginFetch`, `streamCrop`, `streamTransform`, `streamCacheEntry`, `streamPurge`, `streamOriginFetch`, `streamCrop`, `streamTransform`, `streamCacheEntry`, `streamPurge`, `streamOriginFetch`, `streamCrop`, `streamTransform`, `streamCacheEntry`, `streamPurge`, `streamOriginFetch`, `streamCrop`, `streamTransform`, `streamCacheEntry`, `streamPurge`, `streamOriginFetch`, `streamCrop`, `streamTransform`, `streamCacheEntry`, `streamPurge`, `streamOriginFetch`, `streamCrop`, `streamTransform`, `streamCacheEntry`, `streamPurge`, `streamOriginFetch`, `streamCrop`, `streamTransform`, `streamCacheEntry`, `streamPurge`, `streamOriginFetch`, `streamCrop`, `streamTransform`, `streamCacheEntry`, `streamPurge`, `streamOriginFetch`, `streamCrop`, `streamTransform`, `streamCacheEntry`, `streamPurge`, `streamOriginFetch`, `streamCrop`, `streamTransform`, `streamCacheEntry`, `streamPurge`, `streamOriginFetch`, `streamCrop`, `streamTransform`, `streamCacheEntry`, `streamPurge`, `streamOriginFetch`, `streamCrop`, `streamTransform`, `streamCacheEntry`, `streamPurge`, `streamOriginFetch`, `streamCrop`, `streamTransform`, `streamCacheEntry`, `streamPurge`, `streamOriginFetch`, `streamCrop`, `streamTransform`, `streamCacheEntry`, `streamPurge`, `streamOriginFetch`, `streamCrop`, `streamTransform`, `streamCacheEntry`, `streamPurge`, `streamOriginFetch`, `streamCrop`, `streamTransform`, `streamCacheEntry`, `streamPurge`, `streamOriginFetch`, `streamCrop`, `streamTransform`, `streamCacheEntry`, `streamPurge`, `streamOriginFetch`, `streamCrop`, `streamTransform`, `streamCacheEntry`, `streamPurge`, `streamOriginFetch`, `streamCrop`, `streamTransform`, `streamCacheEntry`, `streamPurge`, `streamOriginFetch`, `streamCrop`, `streamTransform`, `streamCacheEntry`, `streamPurge`, `streamOriginFetch`, `streamCrop`, `streamTransform`, `streamCacheEntry`, `streamPurge`, `streamOriginFetch`, `streamCrop`, `streamTransform`, `streamCacheEntry`, `streamPurge`, `streamOriginFetch`, `streamCrop`, `streamTransform`, `streamCacheEntry`, `streamPurge`, `streamOriginFetch`, `streamCrop`, `streamTransform`, `streamCacheEntry`, `streamPurge`, `streamOriginFetch`, `streamCrop`, `streamTransform`, `streamCacheEntry`, `streamPurge`, `streamOriginFetch`, `streamCrop`, `streamTransform`, `streamCacheEntry`, `streamPurge`, `streamOriginFetch`, `streamCrop`, `streamTransform`, `streamCacheEntry`, `streamPurge`, `streamOriginFetch`, `streamCrop`, `streamTransform`, `streamCacheEntry`, `streamPurge`, `streamOriginFetch`, `streamCrop`, `streamTransform`, `streamCacheEntry`, `streamPurge`, `streamOriginFetch`, `streamCrop`, `streamTransform`, `streamCacheEntry`, `streamPurge`, `streamOriginFetch`, `streamCrop`, `streamTransform`, `streamCacheEntry`, `streamPurge`, `streamOriginFetch`, `streamCrop`, `streamTransform`, `streamCacheEntry`, `streamPurge`, `streamOriginFetch`, `streamCrop`, `streamTransform`, `streamCacheEntry`, `streamPurge`, `streamOriginFetch`, `streamCrop`, `streamTransform`, `streamCacheEntry`, `streamPurge`, `streamOriginFetch`, `streamCrop`, `streamTransform`, `streamCacheEntry`, `streamPurge`, `streamOriginFetch`, `streamCrop`, `streamTransform`, `streamCacheEntry`, `streamPurge`, `streamOriginFetch`, `streamCrop`, `streamTransform`, `streamCacheEntry`, `streamPurge`, `streamOriginFetch`, `streamCrop`, `streamTransform`, `streamCacheEntry`, `streamPurge`, `streamOriginFetch`, `streamCrop`, `streamTransform`, `streamCacheEntry`, `streamPurge`, `streamOriginFetch`, `streamCrop`, `streamTransform`, `streamCacheEntry`, `streamPurge`, `streamOriginFetch`, `streamCrop`, `streamTransform`, `streamCacheEntry`, `streamPurge`, `streamOriginFetch`, `streamCrop`, `streamTransform`, `streamCacheEntry`, `streamPurge`, `streamOriginFetch`, `streamCrop`, `streamTransform`, `streamCacheEntry`, `streamPurge`, `streamOriginFetch`, `streamCrop`, `streamTransform`, `streamCacheEntry`, `streamPurge`, `streamOriginFetch`, `streamCrop`, `streamTransform`, `streamCacheEntry`, `streamPurge`, `streamOriginFetch`, `streamCrop`, `streamTransform`, `streamCacheEntry`, `streamPurge`, `streamOriginFetch`, `streamCrop`, `streamTransform`, `streamCacheEntry`, `streamPurge`, `streamOriginFetch`, `streamCrop`, `streamTransform`, `streamCacheEntry`, `streamPurge`, `streamOriginFetch`, `streamCrop`, `streamTransform`, `streamCacheEntry`, `streamPurge`, `streamOriginFetch`, `streamCrop`, `streamTransform`, `streamCacheEntry`, `streamPurge`, `streamOriginFetch`, `streamCrop`, `streamTransform`, `streamCacheEntry`, `streamPurge`, `streamOriginFetch`, `streamCrop`, `streamTransform`, `streamCacheEntry`, `streamPurge`, `streamOriginFetch`, `streamCrop`, `streamTransform`, `streamCacheEntry`, `streamPurge`, `streamOriginFetch`, `streamCrop`, `streamTransform`, `streamCacheEntry`, `streamPurge`, `streamOriginFetch`, `streamCrop`, `streamTransform`, `streamCacheEntry`, `streamPurge`, `streamOriginFetch`, `streamCrop`, `streamTransform`, `streamCacheEntry`, `streamPurge`, `streamOriginFetch`, `streamCrop`, `streamTransform`, `streamCacheEntry`, `streamPurge`, `streamOriginFetch`, `streamCrop`, `streamTransform`, `streamCacheEntry`, `streamPurge`, `streamOriginFetch`, `streamCrop`, `streamTransform`, `streamCacheEntry`, `streamPurge
 ```
 
-## 7. M3 on exp1-b-bb169ee8ea
+## 10. M3 on exp1-b-bb169ee8ea
 
 ```
 ## Primary request and intent
@@ -215,220 +466,4 @@ The user reported that the `+` session tab and `/new` session creation aren't wo
 
 ## Files and code sections
 - `src/taskpane/init.ts` — the file under review. Contains the `createRuntimeFromUi` wrapper, `showWelcomeLogin`, `showRulesDialog`, `showResumeDialog`, `showFilesWorkspaceDialog`, `showShortcutsDialog`, `openIntegrationsManager`, `openIntegrationsManager`, `openSettingsDialog`, `openFilesWorkspaceDialog`, `openRecoveryDialog`, `openExtensionsManager`, `openIntegrationsManager`, `openIntegrationsManager`, `openIntegrationsManager`, `openIntegrationsManager`, `openIntegrationsManager`, `openIntegrationsManager`, `openIntegrationsManager`, `openIntegrationsManager`, `openIntegrationsManager`, `openIntegrationsManager`, `openIntegrationsManager`, `openIntegrationsManager`, `openIntegrationsManager`, `openIntegrationsManager`, `openIntegrationsManager`, `openIntegrationsManager`, `openIntegrationsManager`, `openIntegrationsManager`, `openIntegrationsManager`, `openIntegrationsManager`, `openIntegrationsManager`, `openIntegrationsManager`, `openIntegrationsManager`, `openIntegrationsManager`, `openIntegrationsManager`, `openIntegrationsManager`, `openIntegrationsManager`, `openIntegrationsManager`, `openIntegrationsManager`, `openIntegrationsManager`, `openIntegrationsManager`, `openIntegrationsManager`, `openIntegrationsManager`, `openIntegrationsManager`, `openIntegrationsManager`, `openIntegrationsManager`, `openIntegrationsManager`, `openIntegrationsManager`, `openIntegrationsManager`, `openIntegrationsManager`, `openIntegrationsManager`, `openIntegrationsManager`, `openIntegrationsManager`, `openIntegrationsManager`, `openIntegrationsManager`, `openIntegrationsManager`, `openIntegrationsManager`, `openIntegrationsManager`, `openIntegrationsManager`, `openIntegrationsManager`, `openIntegrationsManager`, `openIntegrationsManager`, `openIntegrationsManager`, `openIntegrationsManager`, `openIntegrationsManager`, `openIntegrationsManager`, `openIntegrationsManager`, `openIntegrationsManager`, `openIntegrationsManager`, `openIntegrationsManager`, `openIntegrationsManager`, `openIntegrationsManager`, `openIntegrationsManager`, `openIntegrationsManager`, `openIntegrationsManager`, `openIntegrationsManager`, `openIntegrationsManager`, `openIntegrationsManager`, `openIntegrationsManager`, `openIntegrationsManager`, `openIntegrationsManager`, `openIntegrationsManager`, `openIntegrationsManager`, `openIntegrationsManager`, `openIntegrationsManager`, `openIntegrationsManager`, `openIntegrationsManager`, `openIntegrationsManager`, `openIntegrationsManager`, `openIntegrationsManager`, `openIntegrationsManager`, `openIntegrationsManager`, `openIntegrationsManager`, `openIntegrationsManager`, `openIntegrationsManager`, `openIntegrationsManager`, `openIntegrationsManager`, `openIntegrationsManager`, `openIntegrationsManager`, `openIntegrationsManager`, `openIntegrationsManager`, `openIntegrationsManager`, `openIntegrationsManager`, `openIntegrationsManager`, `openIntegrationsManager`, `openIntegrationsManager`, `openIntegrationsManager`, `openIntegrationsManager`, `openIntegrationsManager`, `openIntegrationsManager`, `openIntegrationsManager`, `openIntegrationsManager`, `openIntegrationsManager`, `openIntegrationsManager`, `openIntegrationsManager`, `openIntegrationsManager`, `openIntegrationsManager`, `openIntegrationsManager`, `openIntegrationsManager`, `openIntegrationsManager`, `openIntegrationsManager`, `openIntegrationsManager`, `openIntegrationsManager`, `openIntegrationsManager`, `openIntegrationsManager`, `openIntegrationsManager`, `openIntegrationsManager`, `openIntegrationsManager`, `openIntegrationsManager`, `openIntegrationsManager`, `openIntegrationsManager`, `openIntegrationsManager`, `openIntegrationsManager`, `openIntegrationsManager`, `openIntegrationsManager`, `openIntegrationsManager`, `openIntegrationsManager`, `openIntegrationsManager`, `openIntegrationsManager`, `openIntegrationsManager`, `openIntegrationsManager`, `openIntegrationsManager`, `openIntegrationsManager`, `openIntegrationsManager`, `openIntegrationsManager`, `openIntegrationsManager`, `openIntegrationsManager`, `openIntegrationsManager`, `openIntegrationsManager`, `openIntegrationsManager`, `openIntegrationsManager`, `openIntegrationsManager`, `openIntegrationsManager`, `openIntegrationsManager`, `openIntegrationsManager`, `openIntegrationsManager`, `openIntegrationsManager`, `openIntegrationsManager`, `openIntegrationsManager`, `openIntegrationsManager`, `openIntegrationsManager`, `openIntegrationsManager`, `openIntegrationsManager`, `openIntegrationsManager`, `openIntegrationsManager`, `openIntegrationsManager`, `openIntegrationsManager`, `openIntegrationsManager`, `openIntegrationsManager`, `openIntegrationsManager`, `openIntegrationsManager`, `openIntegrationsManager`, `openIntegrationsManager`, `openIntegrationsManager`, `openIntegrationsManager`, `openIntegrationsManager`, `openIntegrationsManager`, `openIntegrationsManager`, `openIntegrationsManager`, `openIntegrationsManager`, `openIntegrationsManager`, `openIntegrationsManager`, `openIntegrationsManager`, `openIntegrationsManager`, `openIntegrationsManager`, `openIntegrationsManager`, `openIntegrationsManager`, `openIntegrationsManager`, `openIntegrationsManager`, `openIntegrationsManager`, `openIntegrationsManager`, `openIntegrationsManager`, `openIntegrationsManager`, `openIntegrationsManager`, `openIntegrationsManager`, `openIntegrationsManager`, `openIntegrationsManager`, `openIntegrationsManager`, `openIntegrationsManager`, `openIntegrationsManager`, `openIntegrationsManager`, `openIntegrationsManager`, `openIntegrationsManager`, `openIntegrationsManager`, `openIntegrationsManager`, `openIntegrationsManager`, `openIntegrationsManager`, `openIntegrationsManager`, `openIntegrationsManager`, `openIntegrationsManager`, `openIntegrationsManager`, `openIntegrationsManager`, `openIntegrationsManager`, `openIntegrationsManager`, `openIntegrationsManager`, `openIntegrationsManager`, `openIntegrationsManager`, `openIntegrationsManager`, `openIntegrationsManager`, `openIntegrationsManager`, `openIntegrationsManager`, `openIntegrationsManager`, `openIntegrationsManager`, `openIntegrationsManager`, `openIntegrationsManager`, `openIntegrationsManager`, `openIntegrationsManager`, `openIntegrationsManager`, `openIntegrationsManager`, `openIntegrationsManager`, `openIntegrationsManager`, `openIntegrationsManager`, `openIntegrationsManager`, `openIntegrationsManager`, `openIntegrationsManager`, `openIntegrationsManager`, `openIntegrationsManager`, `openIntegrationsManager`, `openIntegrationsManager`, `openIntegrationsManager`, `openIntegrationsManager`, `openIntegrationsManager`, `openIntegrationsManager`, `openIntegrationsManager`, `openIntegrationsManager`, `openIntegrationsManager`, `openIntegrationsManager`, `openIntegrationsManager`, `openIntegrationsManager`, `openIntegrationsManager`, `openIntegrationsManager`, `openIntegrationsManager`, `openIntegrationsManager`, `openIntegrationsManager`, `openIntegrationsManager`, `openIntegrationsManager`, `openIntegrationsManager`, `openIntegrationsManager`, `openIntegrationsManager`, `openIntegrationsManager`, `openIntegrationsManager`, `openIntegrationsManager`, `openIntegrationsManager`, `openIntegrationsManager`, `openIntegrationsManager`, `openIntegrationsManager`, `openIntegrationsManager`, `openIntegrationsManager`, `openIntegrationsManager`, `openIntegrationsManager`, `openIntegrationsManager`, `openIntegrationsManager`, `openIntegrationsManager`, `openIntegrationsManager`, `openIntegrationsManager`, `openIntegrationsManager`, `openIntegrationsManager`, `openIntegrationsManager`, `openIntegrationsManager`, `openIntegrationsManager`, `openIntegrationsManager`, `openIntegrationsManager`, `openIntegrationsManager`, `openIntegrationsManager`, `openIntegrationsManager`, `openIntegrationsManager`, `openIntegrationsManager`, `openIntegrationsManager`, `openIntegrationsManager`, `openIntegrationsManager`, `openIntegrationsManager`, `openIntegrationsManager`, `openIntegrationsManager`, `openIntegrationsManager`, `openIntegrationsManager`, `openIntegrationsManager`, `openIntegrationsManager`, `openIntegrationsManager`, `openIntegrationsManager`, `openIntegrationsManager`, `openIntegrationsManager`, `openIntegrationsManager`, `openIntegrationsManager`, `openIntegrationsManager`, `openIntegrationsManager`, `openIntegrationsManager`, `openIntegrationsManager`, `openIntegrationsManager`, `openIntegrationsManager`, `openIntegrationsManager`, `openIntegrationsManager`, `openIntegrationsManager`, `openIntegrationsManager`, `openIntegrationsManager`, `openIntegrationsManager`, `openIntegrationsManager`, `openIntegrationsManager`, `openIntegrationsManager`, `openIntegrationsManager`, `openIntegrationsManager`, `openIntegrationsManager`, `openIntegrationsManager`, `openIntegrationsManager`, `openIntegrationsManager`, `openIntegrationsManager`, `openIntegrationsManager`, `openIntegrationsManager`, `openIntegrationsManager`, `openIntegrationsManager`, `openIntegrationsManager`, `openIntegrationsManager`, `openIntegrationsManager`, `openIntegrationsManager`, `openIntegrationsManager`, `openIntegrationsManager`, `openIntegrationsManager`, `openIntegrationsManager`, `openIntegrationsManager`, `openIntegrationsManager`, `openIntegrationsManager`, `openIntegrationsManager`, `openIntegrationsManager`, `openIntegrationsManager`, `openIntegrationsManager`, `openIntegrationsManager`, `openIntegrationsManager`, `openIntegrationsManager`, `openIntegrationsManager`, `openIntegrationsManager`, `openIntegrationsManager`, `openIntegrationsManager`, `openIntegrationsManager`, `openIntegrationsManager`, `openIntegrationsManager`, `openIntegrationsManager`, `openIntegrationsManager`, `openIntegrationsManager`, `openIntegrationsManager`, `openIntegrationsManager`, `openIntegrationsManager`, `openIntegrationsManager`, `openIntegrationsManager`, `openIntegrationsManager`, `openIntegrationsManager`, `openIntegrationsManager`, `openIntegrationsManager`, `openIntegrationsManager`, `openIntegrationsManager`, `openIntegrationsManager`, `openIntegrationsManager`, `openIntegrationsManager`, `openIntegrationsManager`, `openIntegrationsManager`, `openIntegrationsManager`, `openIntegrationsManager`, `openIntegrationsManager`, `openIntegrationsManager`, `openIntegrationsManager`, `openIntegrationsManager`, `openIntegrationsManager`, `openIntegrationsManager`, `openIntegrationsManager`, `openIntegrationsManager`, `openIntegrationsManager`, `openIntegrationsManager`, `openIntegrationsManager`, `openIntegrationsManager`, `openIntegrationsManager`, `openIntegrationsManager`, `openIntegrationsManager`, `openIntegrationsManager`, `openIntegrationsManager`, `openIntegrationsManager`, `openIntegrationsManager`, `openIntegrationsManager`, `openIntegrationsManager`, `openIntegrationsManager`, `openIntegrationsManager`, `openIntegrationsManager`, `openIntegrationsManager`, `openIntegrationsManager`, `openIntegrationsManager`, `openIntegrationsManager`, `
-```
-
-## 8. M2 on exp1-b-f783f8f727
-
-```
-## Primary request and intent
-Task: Can we try a dummy ralph-wiggum loop (say 3 iterations)
-Details: Can we try a dummy ralph-wiggum loop (say 3 iterations)
-- Read 30 times while investigating (files above).
-- Searched 23 times while investigating (most recent: bash).
-- Ran 23 times while investigating (most recent: git push).
-- Edited 23 times while investigating (most recent: users/thomasmustier/pi-extensions).
-- Ran 10 times while investigating (most recent: git push).
-- Edited 10 times while investigating (most recent: users/thomasmustier/pi-extensions).
-- Ran 1 time while investigating (most recent: git push).
-
-## Key technical concepts
-- Functions: ralph_start, ralph_done
-- Exception types
-
-## Files and code sections
-- Edited: users/thomasmustier/pi-extensions, ralph/50..md, .ralph/dummy-ralph-loop.md, ralph-wiggum/index.ts, ralph-wiggum/README.md, ralph-wiggum/SKILL.md
-- Ran: ralph_start, ralph_done
-
-## Errors and fixes
-- (from the agent): <promise>COMPLETE</promise>
-
-## Problem solving
-- Read 30 times while investigating (files above).
-- Searched 23 times while investigating (most recent: bash).
-- Ran 23 times while investigating (most recent: git push).
-- Edited 23 times while investigating (most recent: users/thomasmustier/pi-extensions).
-- Ran 10 times while investigating (most recent: git push).
-- Edited 10 times while investigating (most recent: users/thomasmustier/pi-extensions).
-- Ran 1 time while investigating (most recent: git push).
-
-## All user messages
-1. Can we try a dummy ralph-wiggum loop (say 3 iterations)
-2. wait so the promise didn't actually stop the loop, did it?
-3. Ok so we need the promise to stop the loop here right
-4. Can we please review our full implementation and diagnosie
-5. CAn you explain more verbosely please don't follo
-6. Let's not change core pi-mono obvioulsy. We can change the extension if we want
-7. Is there a way to toggle anything while the agent runs? If not then 3. isn't helpful & I would keep 1
-8. Wait actually ESC does work - it interrupts the assistant.
-9. So all we need to do is have a / command called /ralph-stop that stops the loop if the assistant is idle.
-10. Hadn't we implemented ralph clean? archiving behaviour? What happened?
-11. See previous commits
-12. Ok cool. So what happens when I hit esc is that the loop stops, but I suddenly get the queued prompt appearing inside hte editor and need to do CTRL+C to remove it, then type /ralph-stop.
-13. Oh sure
-14. Actually you're just saying that would revert us to previous behaviour right? I think this works fine.
-15. Wait actually ESC does work - it interrupts the assistant.
-16. So all we need to do is have a / command called /ralph-stop that stops the loop if the assistant is idle.
-17. Ok let's
-- ensure our code is clear and concise
-- check if we need to update docs
-- commit/push
-18. Ok what happened there
-19. Did it work? just ran on this repo
-20. Yes please do
-21. Actually you're just saying that would revert us to previous behaviour right? I think this works fine.
-22. Ok let's
-- ensure our code is clear and concise
-- check if we need to update docs
-- commit/push
-23. Can you explain the behaviour of our implementation in plain english please?
-24. Wait so on first iteration (right after ralph_start) have we already queued anotehr message
-25. Actually you're just saying that would revert us to previous behaviour right? I think this works fine.
-26. Hadn't we implemented ralph clean? archiving behaviour? What happened?
-27. Why did we do that? bring them back please
-28. Can you explain the behaviour of our implementation in plain english please?
-
-## Pending tasks
-- Read 1 time while investigating (most recent: Users/thomasmustier/pi-extensions).
-- Run 1 time while investigating (most recent: git push).
-- Test the new implementation (latest run: git push).
-- Keep to the user's later request: Can you explain the behaviour of our implementation in plain english please?
-
-## Current work
-- Previous action: edit Users/thomasmustier/pi-extensions/ralph-wiggum/index.ts
-- Most recently edited file: .ralph/50..md
-- Changed an existing file: yes
-- Ran a test: yes (git push)
-- Most recent exception in the output: <promise>COMPLETE</promise>
-
-## Next step
-Next action: edit Users/thomasmustier/pi-extensions/ralph-wiggum/index.ts
-```
-
-## 9. M1 on exp1-a-s1-s002
-
-```
-## Primary request and intent
-Task: CI on perf/lockfile-warmup-4 (PR #14629) keeps going red.
-Details: We have no coverage for timings in scheduler; add a few tests.
-Details: We have no coverage for the manifest for ci-agent-scheduler-worker.
-Details: Check the manifest for ci-agent-scheduler-worker.
-Details: Before you change anything: Node 22.6.2 is the newest we can use. 22.7 breaks the native addon in packages/imaging.
-Details: And the cache itself? How long do we keep the pnpm store?
-Details: Make it 96 hours. Longer just keeps stale stores around and the bucket bill is already high.
-Details: Let's see if packages/ci/test/reporter is green.
-Details: Pull the notify helpers out into their own module.
-Details: Also the coverage gate: fail the build if line coverage drops below 81.25%.
-Details: Check lint before we commit.
-Details: Next: src/notify/artifactHandlers.ts. Make the error handling consistent with the rest of runners.
-Details: While you're in e2e, clean up artifactClient.ts.
-Details: Make the error handling consistent with the rest of cache.
-Details: Next: src/notify/artifactHandlers.ts. Make the error handling consistent with the rest of runners.
-Details: Can you add a small lint module for the expandPipeline logic?
-Details: Where else is summariseArtifact called?
-Details: Show me what we have uncommitted.
-Details: Can you run the suite?
-Details: Can you add a small lint module for the expandPipeline logic?
-Details: Where else is summariseArtifact called?
-Details: Have a look at src/scheduler/shardStore.ts, something in there looks off.
-Details: Find all callers of restoreTiming before we change its signature.
-Details: Is the timing deployment healthy?
-Details: Show me what we have uncommitted.
-Details: Let's see if packages/ci/test/lint is green.
-
-## Key technical concepts
-- Functions: run, edit, read, search, get, diff, run
-- Exception types: AssertionError
-
-## Files and code sections
-- Edited: packages/ci/test/scheduler/runnerStore.test.ts, .ci/pipeline.yml, src/notify/stepModels.ts, src/cache/cacheEntryStore.ts, src/notify/artifactHandlers.ts, src/e2e/artifactClient.ts, src/runners/cacheEntryModels.ts, src/scheduler/shardStore.ts, src/scheduler/jobCache.ts, src/scheduler/jobCache.ts, src/scheduler/reportModels.ts, src/matrix/reportModels.ts, src/notify/timingQueue.ts, src/reporter/jobStore.ts, src/matrix/reportModels.ts
-- Tests run: packages/ci/test/scheduler/runnerStore.test.ts (pass), ci-bench e2e --node-heap 1536 (pass), ci-bench e2e --node-heap 3072 (pass), packages/ci/test/reporter (fail), packages/ci/test/timing/reportModels.test.ts (pass), packages/ci/test/e2e (fail), packages/ci/test/e2e (fail), packages/ci/test/lint (fail), packages/ci/test/cache/runnerUtils.test.ts (pass), packages/ci/test/runners/cacheEntryModels.test.ts (pass)
-- Run: pnpm vitest run packages/ci/test/scheduler/runnerStore.test.ts --reporter verbose (pass), ci-bench e2e --node-heap 1536 (pass), ci-bench e2e --node-heap 3072 (pass), pnpm tsc --noEmit -p . (pass), pnpm vitest run packages/ci/test/reporter --reporter verbose (pass), pnpm vitest run packages/ci/test/timing/reportModels.test.ts --reporter verbose (pass), pnpm vitest run packages/ci/test/e2e --reporter verbose (fail), pnpm vitest run packages/ci/test/e2e --reporter verbose (fail), pnpm tsc --noEmit -p . (pass), pnpm vitest run packages/ci/test/lint --reporter verbose (fail), pnpm eslint src/reporter/jobStore.ts src/artifacts/runnerModels.ts src/cache/reportQueue.ts src/runners/matrixCellClient.ts src/timing/stepUtils.ts src/reporter/timingCache.ts src/timing/pipelineHandl (fail)
-
-## Errors and fixes
-- AssertionError (from pnpm --filter checkout-e2e test --reporter verbose); not fixed yet
-- TypeError (from pnpm --filter checkout-e2e test --reporter verbose); not fixed yet
-- TypeError (from ci-bench e2e --node-heap 1536); not fixed yet
-
-## Problem solving
-- Read 32 times while investigating (files above).
-- Searched: 9 times (pnpm --filter checkout-e2e test --reporter verbose; buildkite-agent artifact download build-4555.log; buildkite-agent artifact download build-4562.log; buildkite-agent artifact download build-4563.log; rg -n 'annotateCacheEntry' src; rg -n 'summariseArtifact' src; rg -n 'restoreTiming' src; rg -n 'summariseArtifact' src; rg -n 'restoreTiming' src; rg -n 'scheduleReport' src).
-- Ran pnpm --filter checkout-e2e test --reporter verbose: fail (2 failed).
-- Ran pnpm --filter checkout-e2e test --reporter verbose: pass (22 passed).
-- Ran ci-bench e2e --node-heap 1536: pass (no OOM kills and no swapping).
-- Ran ci-bench e2e --node-heap 3072: pass (no OOM kills and no swapping).
-- Edited packages/ci/test/scheduler/runnerStore.test.ts. First run: two failures. Second run: only one of them fails again, so the other is the flake. The one that fails twice is a real regression in the login redirect; I'll note it on the PR.
-- Edited .ci/pipeline.yml. Successfully replaced 1 block(s) in .ci/pipeline.yml.
-- Edited ci/cache.yml. Successfully replaced 1 block(s) in .ci/cache.yml.
-- Edited src/notify/stepModels.ts. New module in place; the findings are style nits.
-- Edited src/cache/cacheEntryStore.ts. New module in place; the findings are style nits.
-- Edited src/notify/artifactHandlers.ts. Successfully replaced 1 block(s) in src/notify/artifactHandlers.ts.
-- Edited src/e2e/artifactClient.ts. Successfully replaced 3 block(s) in src/e2e/artifactClient.ts.
-- Edited src/runners/cacheEntryModels.ts. Successfully wrote to src/runners/cacheEntryModels.ts.
-- Edited src/e2e/artifactClient.ts. Successfully replaced 3 block(s) in src/e2e/artifactClient.ts.
-- Edited src/scheduler/shardStore.ts. Small fix, nothing else changes.
-- Edited src/scheduler/jobCache.ts. Successfully replaced 1 block(s) in src/scheduler/jobCache.ts.
-- Ran pnpm vitest run packages/ci/test/matrix --reporter verbose: pass (191 passed).
-- Ran pnpm vitest run packages/ci/test/e2e --reporter verbose: fail (1 failed).
-- Edited src/scheduler/shardStore.ts. Successfully replaced 2 block(s) in src/scheduler/shardStore.ts.
-- Edited src/scheduler/reportModels.ts. Successfully replaced 2 block(s) in src/scheduler/reportModels.ts.
-- Ran pnpm vitest run packages/ci/test/runners/cacheEntryModels.test.ts --reporter verbose: pass (40 passed).
-- Edited src/matrix/reportModels.ts. Successfully replaced 2 block(s) in src/matrix/reportModels.ts.
-- Ran pnpm eslint src/reporter/jobStore.ts src/artifacts/runnerModels.ts src/cache/reportQueue.ts src/runners/matrixCellClient.ts src/timing/stepUtils.ts src/reporter/timingCache.ts src/timing/pipelineHandl: fail (6 problems).
-
-## All user messages
-1. CI on perf/lockfile-warmup-4 (PR #14629) keeps going red.
-2. We have no coverage for timings in scheduler; add a few tests.
-3. We have no coverage for the manifest for ci-agent-scheduler-worker.
-4. Check the manifest for ci-agent-scheduler-worker.
-5. Before you change anything: Node 22.6.2 is the newest we can use. 22.7 breaks the native addon in packages/imaging.
-6. And the cache itself? How long do we keep the pnpm store?
-7. Make it 96 hours. Longer just keeps stale stores around and the bucket bill is already high.
-8. Let's see if packages/ci/test/reporter is green.
-9. Pull the notify helpers out into their own module.
-10. Also the coverage gate: fail the build if line coverage drops below 81.25%.
-11. Next: src/notify/artifactHandlers.ts. Make the error handling consistent with the rest of runners.
-12. While you're in e2e, clean up artifactClient.ts.
-13. Make the error handling consistent with the rest of cache.
-14. Next: src/notify/artifactHandlers.ts. Make the error handling consistent with the rest of runners.
-15. Can you add a small lint module for the expandPipeline logic?
-16. Where else is summariseArtifact called?
-17. Can you run the suite?
-
-## Pending tasks
-- Make the tests in packages/ci/test/reporter pass (latest run fail).
-- Make the tests in packages/ci/test/e2e pass (latest run fail).
-- Add the coverage gate: fail the build if line coverage drops below 81.25%.
-- Make the tests in packages/ci/test/lint pass (latest run fail).
-- Make the tests in packages/ci/test/runners/cacheEntryModels.test.ts pass (latest run pass).
-- Make the tests in packages/ci/test/runners/pipelineStore.test.ts pass (latest run fail).
-- Keep to the user's later requests: check the manifest for ci-agent-scheduler-worker, before you change anything: Node 22.6.2 is the newest we can use. 22.7 breaks the native addon in packages/imaging, and before you change anything: Node 22.6.2 is the newest we can use.
-
-## Current work
-- Previous action: run pnpm eslint src/reporter/jobStore.ts src/artifacts/runnerModels.ts src/cache/reportQueue.ts src/runners/matrixCellClient.ts src/timing/stepUtils.ts src/reporter/timingCache.ts src/timing/pipelineHandl: fail (6 problems).
-- Most recently edited file: src/matrix/reportModels.ts.
-- Changed an existing file: yes.
-- Latest test run: fail (pnpm eslint src/reporter/jobStore.ts src/artifacts/runnerModels.ts src/cache/reportQueue.ts src/runners/matrixCellClient.ts src/timing/stepUtils.ts src/reporter/timingCache.ts src/timing/pipelineHandl).
-- Most recent exception in the output: TypeError.
-
-## Next step
-Next action: edit src/reporter/jobStore.ts.
-```
-
-## 10. M1 on exp1-a-s1-s006
-
-```
-## Primary request and intent
-Task: Two things on the relay gateway.
-Details: Security flagged CVE-2026-46096 in ws, so we have to upgrade, but don't go past 8.15.7: 8.16 drops the Node 20 build we still ship. And the gateway is leaking memory again, pods get OOM-killed every few hours.
-Details: Test everything on relay-canary-09, relay-canary-08 was taken out of the pool. Heap dumps must go to /data/relay/heapdumps-private, never /tmp: they contain message payloads.
-Details: Is flushFanout still used anywhere?
-Details: We need the canary green by Thursday 08:30. Loop in Klara from the client SDK team if it's a client bug, not Mirela, Mirela is on leave.
-
-## Key technical concepts
-- Functions: acceptConnection, flushFanout
-- Exception types: AssertionError, TypeError, BackpressureError, FrameTooLargeError
-
-## Files and code sections
-- Edited: src/admin/connection.test.ts, test/metrics/connectionClient.test.ts, test/admin/connection.test.ts, config/gateway.yaml, src/metrics/connectionClient.test.ts, src/admin/subscriberQueue.ts, src/gateway/deflaterUtils.ts, src/metrics/heartbeatModels.test.ts, src/admin/deflaterQueue.ts, src/metrics/presenceJobs.test.ts, src/codec/deflater.ts, src/presence/sessionJobs.ts, src/codec/deflater.ts, src/heartbeat/backlogService.ts, src/admin/frameService.ts, src/backlog/channelHandlers.ts, src/metrics/frameHandlers.ts, src/heartbeat/backlogService.ts, src/admin/deflater.test.ts, src/admin/frameService.ts, src/fanout/heartbeatCache.test.ts, src/metrics/connectionHandlers.ts, src/backlog/channelHandlers.ts, src/admin/deflaterClient.test.ts, src/backlog/heartbeat.ts, src/sessions/connectionUtils.ts, src/gateway/channelJobs.ts, src/gateway/heartbeat.ts, src/heartbeat/channel.ts, src/heartbeat/frame.ts, src/heartbeat/presence.ts, src/heartbeat/session.ts, src/metrics/backlogUtils.test.ts, src/admin/presenceService.ts, src/codec/session.ts, src/auth/heartbeatModels.ts, src/gateway/sessionPolicy.ts, src/sessions/sessionCache.ts, src/presence/heartbeatHandlers.ts, src/gateway/deflaterModels.ts, src/auth/connection.ts, src/fanout/channelHandlers.ts, src/admin/subscriberQueue.ts, src/codec/deflaterUtils.ts, src/admin/subscriberQueue.ts, src/codec/session.ts, src/auth/heartbeatModels.ts, src/admin/deflaterQueue.ts, src/metrics/heartbeatModels.test.ts, src/admin/deflater.ts, src/admin/deflaterQueue.ts, src/metrics/presenceJobs.test.ts, src/codec/deflater.ts, src/codec/backlogUtils.ts, src/admin/deflater.ts, src/admin/frameService.ts, src/backlog/heartbeat.ts, src/metrics/connectionHandlers.ts, src/backlog/channelHandlers.ts, src/admin/frameService.ts, src/backlog/heartbeat.ts, src/codec/deflaterClient.test.ts, src/auth/subscriberStore.test.ts, src/relay-auth-worker.yaml, src/codec-2026-09-27.log, var/log/relay/sessions-2026-09-23.log, var/log/relay/fanout-2026-09-11.log, src/metrics/frameHandlers.ts, src/heartbeat/backlogService.ts, src/admin/deflater.test.ts, src/admin/frameService.ts, src/fanout/heartbeatCache.test.ts, src/metrics/connectionHandlers.ts, src/backlog/channelHandlers.ts, src/admin/frameService.ts, src/backlog/heartbeat.ts, src/codec-2026-09-27.log
-- Runs: pnpm vitest run test/metrics/connectionClient.test.ts, pnpm vitest run test/admin/connection.test.ts, scripts/soak.ts, test/gateway -- 1 failed, test/gateway/fanout.test.ts, test/gateway/fanout.test.ts, test/gateway/frame.test.ts, test/metrics/heartbeatModels.test.ts, test/metrics/presenceJobs.test.ts, test/metrics/presenceJobs.test.ts, test/admin/deflater.test.ts, test/sessions/channelClient.test.ts, test/admin/deflater.test.ts, test/fanout/heartbeatCache.test.ts, test/admin/deflater.test.ts, test/admin/deflater.test.ts, test/admin/deflater.test.ts, test/admin/deflater.test.ts, test/admin/deflater.test.ts, test/admin/deflater.test.ts, test/admin/deflater.test.ts, test/admin/deflater.test.ts, test/admin/deflater.test.ts, test/admin/deflater.test.ts, test/admin/deflater.test.ts, test/admin/deflater.test.ts, test/admin/deflater.test.ts, test/admin/deflater.test.ts, test/admin/deflater.test.ts, test/admin/deflater.test.ts, test/admin/deflater.test.ts, test/admin/deflater.test.ts, test/admin/deflater.test.ts, test/admin/deflater.test.ts, test/admin/deflater.test.ts, test/admin/deflater.test.ts, test/admin/deflater.test.ts, test/admin/deflater.test.ts, test/admin/deflater.test.ts, test/admin/deflater.test.ts, test/admin/deflater.test.ts, test/admin/deflater.test.ts, test/admin/deflater.test.ts, test/admin/deflater.test.ts, test/admin/deflater.test.ts, test/admin/deflater.test.ts, test/admin/deflater.test.ts, test/admin/deflater.test.ts, test/admin/deflater.test.ts, test/admin/deflater.test.ts, test/admin/deflater.test.ts, test/admin/deflater.test.ts, test/admin/deflater.test.ts, test/admin/deflater.test.ts, test/admin/deflater.test.ts, test/admin/deflater.test.ts, test/admin/deflater.test.ts, test/admin/deflater.test.ts, test/admin/deflater.test.ts, test/admin/deflater.test.ts, test/admin/deflater.test.ts, test/admin/deflater.test.ts, test/admin/deflater.test.ts, test/admin/deflater.test.ts, test/admin/deflater.test.ts, test/admin/deflater.test.ts, test/admin/deflater.test.ts, test/admin/deflater.test.ts, test/admin/deflater.test.ts, test/admin/deflater.test.ts, test/admin/deflater.test.ts, test/admin/deflater.test.ts, test/admin/deflater.test.ts, test/admin/deflater.test.ts, test/admin/deflater.test.ts, test/admin/deflater.test.ts, test/admin/deflater.test.ts, test/admin/deflater.test.ts, test/admin/deflater.test.ts, test/admin/deflater.test.ts, test/admin/deflater.test.ts, test/admin/deflater.test.ts, test/admin/deflater.test.ts, test/admin/deflater.test.ts, test/admin/deflater.test.ts, test/admin/deflater.test.ts, test/admin/deflater.test.ts, test/admin/deflater.test.ts, test/admin/deflater.test.ts, test/admin/deflater.test.ts, test/admin/deflater.test.ts, test/admin/deflater.test.ts, test/admin/deflater.test.ts, test/admin/deflater.test.ts, test/admin/deflater.test.ts, test/admin/deflater.test.ts, test/admin/deflater.test.ts, test/admin/deflater.test.ts, test/admin/deflater.test.ts, test/admin/deflater.test.ts, test/admin/deflater.test.ts, test/admin/deflater.test.ts, test/admin/deflater.test.ts, test/admin/deflater.test.ts, test/admin/deflater.test.ts, test/admin/deflater.test.ts, test/admin/deflater.test.ts, test/admin/deflater.test.ts, test/admin/deflater.test.ts, test/admin/deflater.test.ts, test/admin/deflater.test.ts, test/admin/deflater.test.ts, test/admin/deflater.test.ts, test/admin/deflater.test.ts, test/admin/deflater.test.ts, test/admin/deflater.test.ts, test/admin/deflater.test.ts, test/admin/deflater.test.ts, test/admin/deflater.test.ts, test/admin/deflater.test.ts, test/admin/deflater.test.ts, test/admin/deflater.test.ts, test/admin/deflater.test.ts, test/admin/deflater.test.ts, test/admin/deflater.test.ts, test/admin/deflater.test.ts, test/admin/deflater.test.ts, test/admin/deflater.test.ts, test/admin/deflater.test.ts, test/admin/deflater.test.ts, test/admin/deflater.test.ts, test/admin/deflater.test.ts, test/admin/deflater.test.ts, test/admin/deflater.test.ts, test/admin/deflater.test.ts, test/admin/deflater.test.ts, test/admin/deflater.test.ts, test/admin/deflater.test.ts, test/admin/deflater.test.ts, test/admin/deflater.test.ts, test/admin/deflater.test.ts, test/admin/deflater.test.ts, test/admin/deflater.test.ts, test/admin/deflater.test.ts, test/admin/deflater.test.ts, test/admin/deflater.test.ts, test/admin/deflater.test.ts, test/admin/deflater.test.ts, test/admin/deflater.test.ts, test/admin/deflater.test.ts, test/admin/deflater.test.ts, test/admin/deflater.test.ts, test/admin/deflater.test.ts, test/admin/deflater.test.ts, test/admin/deflater.test.ts, test/admin/deflater.test.ts, test/admin/deflater.test.ts, test/admin/deflater.test.ts, test/admin/deflater.test.ts, test/admin/deflater.test.ts, test/admin/deflater.test.ts, test/admin/deflater.test.ts, test/admin/deflater.test.ts, test/admin/deflater.test.ts, test/admin/deflater.test.ts, test/admin/deflater.test.ts, test/admin/deflater.test.ts, test/admin/deflater.test.ts, test/admin/deflater.test.ts, test/admin/deflater.test.ts, test/admin/deflater.test.ts, test/admin/deflater.test.ts, test/admin/deflater.test.ts, test/admin/deflater.test.ts, test/admin/deflater.test.ts, test/admin/deflater.test.ts, test/admin/deflater.test.ts, test/admin/deflater.test.ts, test/admin/deflater.test.ts, test/admin/deflater.test.ts, test/admin/deflater.test.ts, test/admin/deflater.test.ts, test/admin/deflater.test.ts, test/admin/deflater.test.ts, test/admin/deflater.test.ts, test/admin/deflater.test.ts, test/admin/deflater.test.ts, test/admin/deflater.test.ts, test/admin/deflater.test.ts, test/admin/deflater.test.ts, test/admin/deflater.test.ts, test/admin/deflater.test.ts, test/admin/deflater.test.ts, test/admin/deflater.test.ts, test/admin/deflater.test.ts, test/admin/deflater.test.ts, test/admin/deflater.test.ts, test/admin/deflater.test.ts, test/admin/deflater.test.ts, test/admin/deflater.test.ts, test/admin/deflater.test.ts, test/admin/deflater.test.ts, test/admin/deflater.test.ts, test/admin/deflater.test.ts, test/admin/deflater.test.ts, test/admin/deflater.test.ts, test/admin/deflater.test.ts, test/admin/deflater.test.ts, test/admin/deflater.test.ts, test/admin/deflater.test.ts, test/admin/deflater.test.ts, test/admin/deflater.test.ts, test/admin/deflater.test.ts, test/admin/deflater.test.ts, test/admin/deflater.test.ts, test/admin/deflater.test.ts, test/admin/deflater.test.ts, test/admin/deflater.test.ts, test/admin/deflater.test.ts, test/admin/deflater.test.ts, test/admin/deflater.test.ts, test/admin/deflater.test.ts, test/admin/deflater.test.ts, test/admin/deflater.test.ts, test/admin/deflater.test.ts, test/admin/deflater.test.ts, test/admin/deflater.test.ts, test/admin/deflater.test.ts, test/admin/deflater.test.ts, test/admin/deflater.test.ts, test/admin/deflater.test.ts, test/admin/deflater.test.ts, test/admin/deflater.test.ts, test/admin/deflater.test.ts, test/admin/deflater.test.ts, test/admin/deflater.test.ts, test/admin/deflater.test.ts, test/admin/deflater.test.ts, test/admin/deflater.test.ts, test/admin/deflater.test.ts, test/admin/deflater.test.ts, test/admin/deflater.test.ts, test/admin/deflater.test.ts, test/admin/deflater.test.ts, test/admin/deflater.test.ts, test/admin/deflater.test.ts, test/admin/deflater.test.ts, test/admin/deflater.test.ts, test/admin/deflater.test.ts, test/admin/deflater.test.ts, test/admin/deflater.test.ts, test/admin/deflater.test.ts, test/admin/deflater.test.ts, test/admin/deflater.test.ts, test/admin/deflater.test.ts, test/admin/deflater.test.ts, test/admin/deflater.test.ts, test/admin/deflater.test.ts, test/admin/deflater.test.ts, test/admin/deflater.test.ts, test/admin/deflater.test.ts, test/admin/deflater.test.ts, test/admin/deflater.test.ts, test/admin/deflater.test.ts, test/admin/deflater.test.ts, test/admin/deflater.test.ts, test/admin/deflater.test.ts, test/admin/deflater.test.ts, test/admin/deflater.test.ts, test/admin/deflater.test.ts, test/admin/deflater.test.ts, test/admin/deflater.test.ts, test/admin/deflater.test.ts, test/admin/deflater.test.ts, test/admin/deflater.test.ts, test/admin/deflater.test.ts, test/admin/deflater.test.ts, test/admin/deflater.test.ts, test/admin/deflater.test.ts, test/admin/def
 ```

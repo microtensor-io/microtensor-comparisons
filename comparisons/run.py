@@ -20,6 +20,9 @@ API_SEED = 576
 CALL_SECONDS = 900.0
 ATTEMPTS = 3
 PAUSE_SECONDS = 20.0
+STREAM_QUIET_SECONDS = float(os.environ.get("STREAM_QUIET_SECONDS", "45"))
+STREAM_ATTEMPTS = 8
+STREAM_PAUSE_SECONDS = 5.0
 WARM_PROMPT = "Reply with the single word ready."
 SERVED_NAME = "slm"
 LOCK = threading.Lock()
@@ -137,6 +140,73 @@ def engine(args: argparse.Namespace) -> int:
     return 0
 
 
+def stream_chat(endpoint: str, key: str, job: dict[str, Any]) -> dict[str, Any]:
+    body = {
+        "model": job["model"],
+        "messages": job["messages"],
+        "max_tokens": job.get("max_tokens") or prompts.MAX_SUMMARY_TOKENS,
+        "temperature": 0,
+        "seed": API_SEED,
+        "stream": True,
+        "stream_options": {"include_usage": True},
+        "return_progress": True,
+        "cache_prompt": bool(job.get("cache_prompt", True)),
+        "chat_template_kwargs": {"enable_thinking": False},
+    }
+    started = time.perf_counter()
+    first: float | None = None
+    text: list[str] = []
+    usage: dict[str, Any] = {}
+    timings: dict[str, Any] = {}
+    finish = ""
+    quiet = httpx.Timeout(CALL_SECONDS, read=STREAM_QUIET_SECONDS)
+    with httpx.Client(timeout=quiet) as http:
+        with http.stream(
+            "POST",
+            endpoint.rstrip("/") + "/chat/completions",
+            json=body,
+            headers={"authorization": f"Bearer {key}"},
+        ) as response:
+            if response.status_code >= 400:
+                response.read()
+                raise ValueError(f"{response.status_code}: {response.text[:200]}")
+            for line in response.iter_lines():
+                if not line.startswith("data:"):
+                    continue
+                payload = line[5:].strip()
+                if payload == "[DONE]":
+                    break
+                chunk = json.loads(payload)
+                if chunk.get("error"):
+                    raise ValueError(str(chunk["error"])[:200])
+                if chunk.get("usage"):
+                    usage = dict(chunk["usage"])
+                if chunk.get("timings"):
+                    timings = dict(chunk["timings"])
+                for choice in chunk.get("choices") or []:
+                    piece = str((choice.get("delta") or {}).get("content") or "")
+                    if piece and first is None:
+                        first = time.perf_counter()
+                    text.append(piece)
+                    finish = str(choice.get("finish_reason") or finish)
+    ended = time.perf_counter()
+    if not usage:
+        raise ValueError("the stream ended without usage")
+    elapsed = round((ended - started) * 1000)
+    return {
+        "text": "".join(text),
+        "finish_reason": finish,
+        "tokens_in": int(usage.get("prompt_tokens") or 0),
+        "tokens_out": int(usage.get("completion_tokens") or 0),
+        "ttft_ms": round(((first or ended) - started) * 1000),
+        "latency_ms": elapsed,
+        "wall_ms": elapsed,
+        "cached_tokens": int(timings.get("cache_n") or 0),
+        "server_prompt_ms": round(float(timings.get("prompt_ms") or 0)),
+        "server_predicted_ms": round(float(timings.get("predicted_ms") or 0)),
+    }
+
+
 def chat(endpoint: str, key: str, job: dict[str, Any]) -> dict[str, Any]:
     listed = prompts.LIST_PRICES.get(job["model"]) or {}
     body = {
@@ -176,20 +246,32 @@ def jobs(args: argparse.Namespace) -> int:
         raise SystemExit(f"set {args.key_env} to the API key")
     have = done(out, "id")
     todo = [job for job in read_rows(path) if job["id"] not in have]
+    if args.only:
+        todo = [job for job in todo if job["model"] == args.only]
+    todo = [job for at, job in enumerate(todo) if at % args.of == args.part]
+    send = stream_chat if args.stream else chat
     print(f"{len(todo)} jobs to run", flush=True)
 
     def work(job: dict[str, Any]) -> None:
         row: dict[str, Any] = {"id": job["id"], "model": job["model"]}
-        for attempt in range(ATTEMPTS):
+        for attempt in range(STREAM_ATTEMPTS if args.stream else ATTEMPTS):
             try:
-                row.update(chat(args.endpoint, key, job))
+                row.update(send(args.endpoint, key, job))
                 row.pop("error", None)
                 row["attempts"] = attempt + 1
                 break
             except (httpx.HTTPError, ValueError) as exc:
                 row["error"] = f"{type(exc).__name__}: {exc}"[:300]
-                time.sleep(PAUSE_SECONDS * (attempt + 1))
+                if "exceed_context_size" in row["error"]:
+                    break
+                time.sleep(
+                    STREAM_PAUSE_SECONDS if args.stream else PAUSE_SECONDS * (attempt + 1)
+                )
         append(out, row)
+        print(
+            row["id"], row.get("tokens_in"), row.get("tokens_out"), row.get("wall_ms"),
+            row.get("error", ""), flush=True,
+        )
 
     with ThreadPoolExecutor(max_workers=args.workers) as pool:
         list(pool.map(work, todo))
@@ -215,6 +297,10 @@ def main(argv: list[str] | None = None) -> int:
     api.add_argument("--key-env", default="OPENROUTER_API_KEY")
     api.add_argument("--jobs", required=True)
     api.add_argument("--workers", type=int, default=4)
+    api.add_argument("--stream", action="store_true")
+    api.add_argument("--only", default="")
+    api.add_argument("--part", type=int, default=0)
+    api.add_argument("--of", type=int, default=1)
     api.set_defaults(handler=jobs)
     args = parser.parse_args(argv)
     return int(args.handler(args))

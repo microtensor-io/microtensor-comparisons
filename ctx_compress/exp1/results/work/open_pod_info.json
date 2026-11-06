@@ -1,0 +1,10 @@
+{
+ "card": "NVIDIA A40 48 GB",
+ "cloud": "RunPod secure cloud",
+ "usd_per_hour": 0.59,
+ "image": "ghcr.io/ggml-org/llama.cpp@sha256:821d0ae4e5d4e82a2ad8d08973b5f9cd5d0b84524b1d2439ed1f3e41ebc6b4c7",
+ "build": "b12124-8bed7cfb9",
+ "context_tokens": 131072,
+ "thinking": "off",
+ "temperature": 0
+}

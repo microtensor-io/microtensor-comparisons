@@ -21,19 +21,19 @@ HAND_CHECKS = 10
 HOURLY_FALLBACK = 0.89
 POD_TIME = "measured on the RTX 4090 pod"
 PROVIDER_TIME = "provider response time through the relay"
+RENTED_TIME = "measured on the rented 48 GB pod"
 GROUPS = {
     "M1": "Miner models",
     "M2": "Miner models",
     "M3": "Miner models",
     "B0": "Base model",
-    "F1": "Frontier models",
-    "F2": "Frontier models",
-    "F3": "Frontier models",
-    "P1": "Frontier models",
+    "F1": "Larger open models",
+    "F2": "Larger open models",
+    "P1": "Larger open models",
 }
 COLOURS = {
     "Miner models": "#2a78d6",
-    "Frontier models": "#eb6834",
+    "Larger open models": "#eb6834",
     "Base model": "#1baf7a",
 }
 SURFACE = "#fcfcfb"
@@ -132,6 +132,9 @@ def parse_vote(text: str) -> dict[str, Any] | None:
         held = json.loads(found.group(0))
     except ValueError:
         return None
+    if isinstance(held, dict) and "pass" not in held:
+        inner = [v for v in held.values() if isinstance(v, dict) and "pass" in v]
+        held = inner[0] if len(inner) == 1 else held
     if not isinstance(held, dict) or "pass" not in held:
         return None
     return {"pass": bool(held["pass"]), "confident": held.get("confident")}
@@ -178,9 +181,16 @@ def judged(work: Path) -> tuple[dict[tuple[str, str], dict[str, Any]], dict[str,
 
 
 def cost_of(
-    contestant: str, row: dict[str, Any], hourly: float
+    contestant: str, row: dict[str, Any], hourly: float, rented: float = 0.0
 ) -> tuple[float | None, str]:
     held = prompts.SUMMARISERS[contestant]
+    if held["runs_on"] == "rented GPU":
+        if row.get("total_ms") is None:
+            return None, "not timed yet"
+        return (
+            rented * float(row["total_ms"]) / 3_600_000,
+            "48 GB card time at the pod's hourly price",
+        )
     if held["runs_on"] == "relay":
         price = prompts.LIST_PRICES[held["model"]]
         cost = (
@@ -210,6 +220,12 @@ def assemble(args: argparse.Namespace) -> dict[str, Any]:
         else {}
     )
     hourly = float(pod.get("usd_per_hour") or HOURLY_FALLBACK)
+    opened = (
+        json.loads((work / "open_pod_info.json").read_text())
+        if (work / "open_pod_info.json").is_file()
+        else {}
+    )
+    rented = float(opened.get("usd_per_hour") or 0.0)
     replies = {row["id"]: row for row in read_rows(work / "reader.jobs.results.jsonl")}
     verdicts, agreement = judged(work)
     scoring = rule_scorer(Path(args.package)) if replies else None
@@ -264,20 +280,27 @@ def assemble(args: argparse.Namespace) -> dict[str, Any]:
                 "budget_tokens": label["budget_tokens"],
             }
             if summariser:
-                relay = prompts.SUMMARISERS[contestant]["runs_on"] == "relay"
-                cost, basis = cost_of(contestant, out, hourly)
+                where = prompts.SUMMARISERS[contestant]["runs_on"]
+                relay = where == "relay"
+                cost, basis = cost_of(contestant, out, hourly, rented)
                 row.update(
                     summary=out["text"],
                     input_tokens=out["input_tokens"],
                     output_tokens=out["output_tokens"],
                     ttft_ms=out.get("ttft_ms"),
                     total_ms=out["total_ms"],
-                    time_source=PROVIDER_TIME if relay else POD_TIME,
+                    time_source=PROVIDER_TIME
+                    if relay
+                    else RENTED_TIME
+                    if where == "rented GPU"
+                    else POD_TIME,
                     cost_usd=cost,
                     cost_basis=basis,
                     gpu_cost_usd=None
-                    if relay
-                    else hourly * float(out["total_ms"]) / 3_600_000,
+                    if relay or out.get("total_ms") is None
+                    else (rented if where == "rented GPU" else hourly)
+                    * float(out["total_ms"])
+                    / 3_600_000,
                     relay_cost_micros=out.get("cost_micros"),
                     receipt=out.get("receipt"),
                 )
@@ -346,6 +369,7 @@ def assemble(args: argparse.Namespace) -> dict[str, Any]:
         "status": status,
         "agreement": agreement,
         "pod": pod,
+        "open_pod": opened,
         "hourly": hourly,
     }
 
@@ -472,9 +496,9 @@ def paired(found: dict[str, Any]) -> list[dict[str, Any]]:
                         held[probe["id"]] = bool(probe["passed"])
         return held
 
-    for other in ("F1", "F2", "F3", "P1"):
+    for one, other in (("M1", "F1"), ("M1", "F2"), ("M1", "P1"), ("M1", "B0"), ("F1", "P1")):
         for metric in ("pass", "planted fact recall", "commitment pass"):
-            first, second = outcomes("M1", metric), outcomes(other, metric)
+            first, second = outcomes(one, metric), outcomes(other, metric)
             shared = sorted(set(first) & set(second))
             if not shared:
                 continue
@@ -483,7 +507,7 @@ def paired(found: dict[str, Any]) -> list[dict[str, Any]]:
             tests.append(
                 {
                     "metric": metric,
-                    "first": "M1",
+                    "first": one,
                     "second": other,
                     "pairs": len(shared),
                     "first_rate": sum(first[k] for k in shared) / len(shared),
@@ -625,11 +649,19 @@ def chart(table: list[dict[str, Any]], path: Path) -> None:
                 markeredgewidth=2,
                 zorder=3,
             )
+            crowded = any(
+                other is not row
+                and other["cost_per_compaction_usd"] > x
+                and other["cost_per_compaction_usd"] < x * 1.5
+                and abs(other[name] * 100 - y) < 6
+                for other in shown
+            )
             axis.annotate(
                 f"{row['contestant']} {row['label']}",
                 (x, y),
-                xytext=(8, 6),
+                xytext=(-8, 6) if crowded else (8, 6),
                 textcoords="offset points",
+                ha="right" if crowded else "left",
                 fontsize=7.5,
                 color=INK_SOFT,
             )
@@ -758,6 +790,7 @@ def main(argv: list[str] | None = None) -> int:
                 "status": found["status"],
                 "judge_agreement": found["agreement"],
                 "pod": found["pod"],
+                "open_pod": found.get("open_pod") or {},
                 "summary": table,
                 "tests": tests,
             },

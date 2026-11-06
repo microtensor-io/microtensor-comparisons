@@ -11,10 +11,62 @@ from comparisons import prompts
 from comparisons.prompts import read_rows, write_rows
 
 MAX_RELAY_CHARS = 600_000
+CACHE_NOISE_TOKENS = 2000
+
+
+def best_rows(path: Path) -> dict[str, dict[str, Any]]:
+    found: dict[str, dict[str, Any]] = {}
+    for row in read_rows(path):
+        held = found.get(row["id"])
+        if held is None or held.get("error") or not row.get("error"):
+            found[row["id"]] = row
+    return found
+
+
+def clean(row: dict[str, Any]) -> bool:
+    whole = int(row.get("cached_tokens") or 0) < CACHE_NOISE_TOKENS
+    served = bool(row.get("server_prompt_ms") and row.get("server_predicted_ms"))
+    return whole and (served or int(row.get("attempts") or 1) == 1)
+
+
+def prompt_fit(rows: list[dict[str, Any]]) -> tuple[float, float, float]:
+    points = [
+        (float(row["tokens_in"]), float(row.get("server_prompt_ms") or row.get("ttft_ms") or 0))
+        for row in rows
+    ]
+    points = [(n, y) for n, y in points if n > 0 and y > 0]
+    if len(points) < 3:
+        return 0.0, 0.0, 0.0
+    s2 = sum(n * n for n, _ in points)
+    s3 = sum(n**3 for n, _ in points)
+    s4 = sum(n**4 for n, _ in points)
+    t1 = sum(n * y for n, y in points)
+    t2 = sum(n * n * y for n, y in points)
+    det = s2 * s4 - s3 * s3
+    slope = (t1 * s4 - t2 * s3) / det
+    curve = (s2 * t2 - s3 * t1) / det
+    mean = sum(y for _, y in points) / len(points)
+    spread = sum((y - mean) ** 2 for _, y in points)
+    left = sum((y - (slope * n + curve * n * n)) ** 2 for n, y in points)
+    return slope, curve, 1 - left / spread if spread else 0.0
+
+
+def generation_ms(row: dict[str, Any]) -> float:
+    if row.get("server_predicted_ms"):
+        return float(row["server_predicted_ms"])
+    return max(0.0, float(row["latency_ms"]) - float(row.get("ttft_ms") or 0))
+
+
+def timing(row: dict[str, Any]) -> tuple[float | None, float, str]:
+    served = row.get("server_prompt_ms") and row.get("server_predicted_ms")
+    if served:
+        prompt = float(row["server_prompt_ms"])
+        return prompt, prompt + float(row["server_predicted_ms"]), "server"
+    return row.get("ttft_ms"), float(row["latency_ms"]), "client"
 
 
 def _relay(contestant: str) -> bool:
-    return prompts.SUMMARISERS[contestant]["runs_on"] == "relay"
+    return "model" in prompts.SUMMARISERS[contestant]
 
 
 def _chars(messages: list[dict[str, str]]) -> int:
@@ -52,24 +104,58 @@ def summaries(args: argparse.Namespace) -> int:
 
 def collect(args: argparse.Namespace) -> int:
     work = Path(args.work)
-    found = {row["id"]: row for row in read_rows(work / "summaries.jobs.results.jsonl")}
+    found = best_rows(work / "summaries.jobs.results.jsonl")
+    again = {
+        key: row
+        for key, row in best_rows(work / "retime.jobs.results.jsonl").items()
+        if not row.get("error") and clean(row)
+    }
     items = prompts.load_items(Path(args.items))
+    fits: dict[str, tuple[float, float, float]] = {}
+    for model in prompts.OPEN_MODELS:
+        fits[model] = prompt_fit(
+            [
+                row
+                for row in [*found.values(), *again.values()]
+                if row.get("model") == model and not row.get("error") and clean(row)
+            ]
+        )
+    (work / "prompt_time_fit.json").write_text(
+        json.dumps(
+            {
+                model: {"ms_per_token": a, "ms_per_token_squared": b, "r_squared": r}
+                for model, (a, b, r) in fits.items()
+            },
+            indent=1,
+        ),
+        encoding="utf-8",
+    )
     for contestant in prompts.SUMMARISERS:
         if not _relay(contestant):
             continue
         rows = []
         for item in items:
-            held = found.get(f"sum-{contestant}-{item['item_id']}") or {}
+            name = f"sum-{contestant}-{item['item_id']}"
+            held = found.get(name) or {}
             row: dict[str, Any] = {"contestant": contestant, "item_id": item["item_id"]}
             if not held or held.get("error"):
                 row["error"] = held.get("error") or "no result"
             else:
+                timed = held if clean(held) else again.get(f"rt-{name}")
+                first, total, source = timing(timed) if timed else (None, None, "retried")
+                slope, curve, _ = fits.get(str(held.get("model")), (0.0, 0.0, 0.0))
+                if timed is None and slope:
+                    count = float(held["tokens_in"])
+                    first = slope * count + curve * count * count
+                    total = first + generation_ms(held)
+                    source = "prompt time fitted, generation measured"
                 row.update(
                     text=held["text"],
                     input_tokens=held["tokens_in"],
                     output_tokens=held["tokens_out"],
-                    ttft_ms=None,
-                    total_ms=held["latency_ms"],
+                    ttft_ms=first,
+                    total_ms=total,
+                    timing=source,
                     wall_ms=held["wall_ms"],
                     cost_micros=held.get("cost_micros"),
                     finish_reason=held["finish_reason"],
@@ -90,7 +176,14 @@ def floor_text(text: str, tokenizer: Any) -> str:
     return text[offsets[-prompts.FLOOR_TOKENS][0] :]
 
 
-def contexts(work: Path, items: list[dict[str, Any]]) -> dict[tuple[str, str], str]:
+def wanted(args: argparse.Namespace) -> list[str]:
+    named = [name for name in str(args.contestants or "").split(",") if name]
+    return [name for name in prompts.CONTESTANTS if not named or name in named]
+
+
+def contexts(
+    work: Path, items: list[dict[str, Any]], names: list[str]
+) -> dict[tuple[str, str], str]:
     from arenas.compress import build
     from tokenizers import Tokenizer
 
@@ -99,6 +192,8 @@ def contexts(work: Path, items: list[dict[str, Any]]) -> dict[tuple[str, str], s
     )
     found: dict[tuple[str, str], str] = {}
     for contestant in prompts.SUMMARISERS:
+        if contestant not in names:
+            continue
         rows = {
             row["item_id"]: row
             for row in read_rows(work / "outputs" / f"{contestant}.jsonl")
@@ -128,9 +223,10 @@ def reader(args: argparse.Namespace) -> int:
     template = (Path(args.package) / "materials/prompts/probe.md").read_text(
         encoding="utf-8"
     )
-    held = contexts(work, items)
+    names = wanted(args)
+    held = contexts(work, items, names)
     rows = []
-    for contestant in prompts.CONTESTANTS:
+    for contestant in names:
         for item in items:
             context = held[(contestant, item["item_id"])]
             for probe in probes_of(item):
@@ -153,7 +249,7 @@ def reader(args: argparse.Namespace) -> int:
     over = [row["id"] for row in rows if _chars(row["messages"]) > MAX_RELAY_CHARS]
     if over:
         raise ValueError(f"over the relay's character limit: {over[:5]}")
-    write_rows(work / "reader.jobs.jsonl", rows)
+    write_rows(work / f"reader{args.tag}.jobs.jsonl", rows)
     floors = {item["item_id"]: held[("C0", item["item_id"])] for item in items}
     (work / "floor_contexts.json").write_text(
         json.dumps(floors, ensure_ascii=False), encoding="utf-8"
@@ -168,7 +264,7 @@ def judge(args: argparse.Namespace) -> int:
     brief = (Path(args.package) / "materials/s4/scorer.md").read_text(encoding="utf-8")
     replies = {row["id"]: row for row in read_rows(work / "reader.jobs.results.jsonl")}
     cases = []
-    for contestant in prompts.CONTESTANTS:
+    for contestant in wanted(args):
         for item in items:
             for probe in probes_of(item):
                 if probe["kind"] != "commitment":
@@ -219,6 +315,8 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--work", default="ctx_compress/exp1/results/work")
     parser.add_argument("--package", default="")
     parser.add_argument("--pi", default="")
+    parser.add_argument("--contestants", default="")
+    parser.add_argument("--tag", default="")
     args = parser.parse_args(argv)
     return int(
         {"summaries": summaries, "collect": collect, "reader": reader, "judge": judge}[

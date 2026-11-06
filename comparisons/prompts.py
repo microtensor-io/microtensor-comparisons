@@ -10,7 +10,7 @@ FLOOR_TOKENS = 3072
 FACT_ANSWER_TOKENS = 200
 REPLY_TOKENS = 1500
 JUDGE_TOKENS = 300
-JUDGE_VOTES = 3
+JUDGE_VOTES = 1
 SECOND_JUDGE_SHARE = 0.25
 SEED = 20261106
 
@@ -20,20 +20,19 @@ SUMMARISERS = {
     "M3": {"label": "UID 14 model", "runs_on": "4090"},
     "B0": {"label": "Granite 4.0 H Micro base", "runs_on": "4090"},
     "F1": {
-        "label": "Claude Haiku 5.5",
-        "runs_on": "relay",
-        "model": "claude-haiku-5-5",
+        "label": "Qwen 3.8 27B",
+        "runs_on": "rented GPU",
+        "model": "qwen-3-8-27b",
     },
-    "F2": {"label": "GLM 5.3 Flash", "runs_on": "relay", "model": "glm-5-3-flash"},
-    "F3": {
-        "label": "Claude Sonnet 5.5",
-        "runs_on": "relay",
-        "model": "claude-sonnet-5-5",
+    "F2": {
+        "label": "Gemma 4 31B",
+        "runs_on": "rented GPU",
+        "model": "gemma-4-31b",
     },
     "P1": {
-        "label": "Claude Sonnet 5.5, Pi prompt",
-        "runs_on": "relay",
-        "model": "claude-sonnet-5-5",
+        "label": "Qwen 3.8 27B, Pi prompt",
+        "runs_on": "rented GPU",
+        "model": "qwen-3-8-27b",
         "prompt": "pi",
     },
 }
@@ -42,9 +41,13 @@ REFERENCES = {
     "C0": {"label": "Floor: last 3,072 tokens"},
 }
 CONTESTANTS = [*SUMMARISERS, *REFERENCES]
-READER = "claude-sonnet-5-5"
-JUDGE = "claude-opus-5-5"
-SECOND_JUDGE = "claude-sonnet-5-5"
+READER = "qwen-3-8-27b"
+JUDGE = "gemma-4-31b"
+SECOND_JUDGE = "qwen-3-8-27b"
+OPEN_MODELS = {
+    "qwen-3-8-27b": "unsloth/Qwen3.8-27B-GGUF:UD-Q6_K_XL",
+    "gemma-4-31b": "unsloth/gemma-4-31B-it-GGUF:UD-Q5_K_XL",
+}
 LIST_PRICES = {
     "claude-haiku-5-5": {
         "provider_model": "anthropic/claude-haiku-5.5",

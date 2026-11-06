@@ -46,7 +46,6 @@ KINDS = {
     "B0": "base",
     "F1": "frontier",
     "F2": "frontier",
-    "F3": "frontier",
     "P1": "baseline",
     "C1": "reference",
     "C0": "reference",
@@ -102,7 +101,10 @@ def build(args: argparse.Namespace) -> dict[str, Any]:
         if name in weights:
             entry["weights"] = weights[name]
         if held.get("model"):
-            entry["model"] = prompts.LIST_PRICES[held["model"]]["provider_model"]
+            entry["model"] = (
+                prompts.OPEN_MODELS.get(held["model"])
+                or prompts.LIST_PRICES[held["model"]]["provider_model"]
+            )
         contestants.append(entry)
     grader = (
         json.loads((work / "grader_info.json").read_text(encoding="utf-8"))
@@ -112,7 +114,7 @@ def build(args: argparse.Namespace) -> dict[str, Any]:
     complete = all(c["status"] == "complete" for c in contestants)
     return {
         "experiment": "exp1",
-        "title": "Compaction models against frontier",
+        "title": "Compaction models against larger open models",
         "run_date": args.date,
         "public": bool(args.public),
         "status": "complete" if complete else "partial",
@@ -145,6 +147,10 @@ def build(args: argparse.Namespace) -> dict[str, Any]:
             "tokenizer": grader.get("tokenizer"),
             "reader": prompts.READER,
             "judge": prompts.JUDGE,
+            "open_models": {
+                "models": prompts.OPEN_MODELS,
+                **(analysis.get("open_pod") or {}),
+            },
         },
         "contestants": contestants,
         "tests": analysis["tests"],
@@ -166,6 +172,18 @@ def build(args: argparse.Namespace) -> dict[str, Any]:
             "canonical rendering does not carry, so 273 is the most a contestant can recall.",
             "Cost for the miner models is 4090 time at the pod's hourly price plus the list price "
             "of 0.01 USD per million input tokens with output free; the base model is 4090 time only.",
+            "Qwen 3.8 27B and Gemma 4 31B are the open weight models the study itself ran, in the "
+            "same quantised files. They ran on rented 48 GB cards with llama.cpp, thinking off, one "
+            "request at a time, and their cost is card time at the pod's hourly price. Closed API "
+            "models are not in this run.",
+            "Qwen 3.8 27B is the reader and Gemma 4 31B the judge, with one vote per reply because "
+            "the judge is deterministic. Qwen rescored a quarter of the replies and the two agreed "
+            "with a kappa of 0.51, so the commitment column is noisy.",
+            "The Pi prompt contestant writes Pi's own summary format, so it cannot pass the arena's "
+            "format gate. Read its planted fact and commitment columns.",
+            "For 21 of the 72 Qwen summaries the stream dropped and resumed from the server's "
+            "cache, so their time is the measured generation time plus prompt time fitted on the "
+            "other rows.",
         ],
         "source": {
             "repo": "microtensor-io/microtensor-comparisons",
