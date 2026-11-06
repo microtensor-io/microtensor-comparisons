@@ -280,7 +280,8 @@
  ],
  "source": {
   "repo": "microtensor-io/microtensor-comparisons",
+  "url": "https://github.com/microtensor-io/microtensor-comparisons",
   "path": "ctx_compress/exp1",
-  "commit": "7f18c0408543c8990a939caadde1011768fdae87"
+  "commit": "bf12c2bf913eb499e1fede147a9397ee8f1f9cfc"
  }
 }
