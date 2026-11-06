@@ -73,15 +73,15 @@
   },
   "probe_image": "ghcr.io/ggml-org/llama.cpp@sha256:43b3988c22c00faae3d04a8f6e3eba41403dff7c5f5952490599f1bcbdc6f3c2",
   "tokenizer": "ibm-granite/granite-4.0-h-micro@d5f01a3ea75f088947be3aae039f4ad52837dfde",
-  "reader": "qwen-3-8-27b",
-  "judge": "gemma-4-31b",
+  "reader": "Qwen 3.8 27B",
+  "judge": "Gemma 4 31B",
   "open_models": {
    "models": {
     "qwen-3-8-27b": "unsloth/Qwen3.8-27B-GGUF:UD-Q6_K_XL",
     "gemma-4-31b": "unsloth/gemma-4-31B-it-GGUF:UD-Q5_K_XL"
    },
    "card": "NVIDIA A40 48 GB",
-   "cloud": "RunPod secure cloud",
+   "cloud": "secure cloud",
    "usd_per_hour": 0.59,
    "image": "ghcr.io/ggml-org/llama.cpp@sha256:821d0ae4e5d4e82a2ad8d08973b5f9cd5d0b84524b1d2439ed1f3e41ebc6b4c7",
    "build": "b12124-8bed7cfb9",
@@ -712,6 +712,6 @@
   "repo": "microtensor-io/microtensor-comparisons",
   "url": "https://github.com/microtensor-io/microtensor-comparisons",
   "path": "ctx_compress/exp1",
-  "commit": "048330ac909282929e744072f4df9cfa1d2bb07f"
+  "commit": "ba17082b96e8f01897528bea9b334a18cd8b0700"
  }
 }
