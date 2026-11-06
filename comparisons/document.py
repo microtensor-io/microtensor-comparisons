@@ -145,8 +145,8 @@ def build(args: argparse.Namespace) -> dict[str, Any]:
             "probe": grader.get("probe"),
             "probe_image": grader.get("probe_image"),
             "tokenizer": grader.get("tokenizer"),
-            "reader": prompts.READER,
-            "judge": prompts.JUDGE,
+            "reader": prompts.SUMMARISERS["F1"]["label"],
+            "judge": prompts.SUMMARISERS["F2"]["label"],
             "open_models": {
                 "models": prompts.OPEN_MODELS,
                 **(analysis.get("open_pod") or {}),

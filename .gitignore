@@ -7,3 +7,8 @@ models/
 *.jobs.jsonl
 open_pods.json
 *.results.jsonl.tmp
+*.p[0-9]*.jobs.results.jsonl
+reader.[A-Za-z]*.jobs.results.jsonl
+judge.[a-z]*.jobs.results.jsonl
+retime.r*.jobs.results.jsonl
+sum-*.jobs.results.jsonl

@@ -9,6 +9,7 @@ This is the record of our own run on 2026-11-06 (UTC): which machines, which ima
 | Workstation | Windows PC, Python 3.11 | Building the items, analysis |
 | Control machine | Cloud VM, 4 vCPU, 16 GB | Driving the GPU pod, running the probe server and the grader |
 | GPU | One rented NVIDIA GeForce RTX 4090, 24 GB, secure cloud, 0.89 USD an hour | Running M1, M2, M3 and B0 |
+| GPU | Up to twelve rented NVIDIA A40, 48 GB, secure cloud, 0.59 USD an hour each | Running Qwen 3.8 27B and Gemma 4 31B as summarisers, reader and judge |
 
 ## Local models
 
@@ -39,23 +40,44 @@ Our internal driver for this step talks to our pod worker and is not in this rep
 - The probe model was asked only about summaries that had all nine headings and fit the budget: 6, 7, 20 and 12 summaries for M1, M2, M3 and B0. The others score zero whatever the probe would say.
 - Grading the four models took about 50 minutes.
 
-## Frontier models, reader and judge
+## Larger open models, reader and judge
 
-Not run. The jobs for the four frontier summarisers were built (144 calls). Small test calls to all four models succeeded, but every call above a few thousand tokens was refused by the provider, which points to the account being out of credit. Nothing from those attempts is in the results.
+The first plan used closed API models. The provider account was out of credit, so the run used the two open weight models the study itself ran.
+
+- Server: `ghcr.io/ggml-org/llama.cpp@sha256:821d0ae4…` (CUDA build `b12124`) on rented NVIDIA A40 cards, 48 GB, secure cloud, 0.59 USD an hour. The server downloads the model file itself: `unsloth/Qwen3.8-27B-GGUF:UD-Q6_K_XL` or `unsloth/gemma-4-31B-it-GGUF:UD-Q5_K_XL`.
+- Flags: context 131,072 tokens, one slot, all layers on the GPU, flash attention on, thinking off. `tools/open_pod.py` holds the exact command.
+- Up to twelve pods ran at once so the work finished in about two and a half hours: two for Qwen's summaries, three for Gemma's, two for Qwen with Pi's prompt, two for the reader on the full sessions, two with four slots each for the reader on summaries, and the Gemma pods again for the judge.
+- One Gemma session is 131,921 tokens in Gemma's tokenizer, so it ran on a pod started with a context of 139,264 tokens.
+- `comparisons/run.py jobs --stream` drove every call from our workstation. It streams, asks the server for prompt progress so the connection never goes quiet, and retries when a stream drops.
+- Reader: Qwen 3.8 27B, 3,483 calls. Judge: Gemma 4 31B, 243 verdicts, one vote each. Second judge: Qwen 3.8 27B on 61 replies. Agreement between the two: kappa 0.51.
+- Grading of the three new contestants ran on the control machine with the same probe server as before, about one minute per scorable summary.
+
+Timeline on Nov 6:
+
+| Step | Time (UTC) |
+|---|---|
+| First pod started | 10:04 |
+| Gemma summaries done | 11:29 |
+| Qwen summaries done, both prompts | 11:53 |
+| Reader done | 12:15 |
+| Judge done, last pod deleted | 12:25 |
 
 ## Cost
 
 | Item | Cost |
 |---|---|
 | RTX 4090, about 65 minutes at 0.89 USD an hour | about 0.97 USD |
-| Frontier calls | 0 USD (not run; estimate about 95 USD) |
+| A40 pods for the open models, reader and judge, about 20 pod hours at 0.59 USD an hour | about 11.90 USD |
 
-Cost per compaction in the results is the card's hourly price times the measured time of that call. For the three Microtensor models the tables also show that figure plus the list price, which is 0.01 USD per million input tokens with output tokens free.
+Cost per compaction in the results is the card's hourly price times the time of that call. For the three Microtensor models the tables also show that figure plus the list price, which is 0.01 USD per million input tokens with output tokens free.
 
 ## Things that went wrong
 
 - **First GPU attempt stopped before the first call.** Our driver read the prompt from the wrong field of the arena definition. It was fixed and restarted; the pod from the failed attempt was deleted by the driver.
-- **No community priced card was available.** The run used the secure cloud price.
+- **No community priced card was available.** Both GPU runs used the secure cloud price.
+- **Streams to the open model pods dropped.** Connections from our workstation broke mid stream on roughly one call in four. The runner first waited minutes before retrying, then was changed to retry after 45 quiet seconds. A retry resumes from the server's prompt cache, so its measured time leaves out the prompt. 21 Qwen summaries ended that way. Timing reruns for them were started and then stopped because they kept dropping too, so their time is the measured generation time plus prompt time fitted on the clean rows of the same model. Every Gemma time is measured.
+- **Two runners doubled up on one pod for a few minutes.** A stopped runner had not actually exited. The affected Gemma results were thrown away and rerun before anything was graded.
+- **The judge sometimes wrapped its verdict.** Gemma often put the verdict object under a key copied from the brief's examples. The parser accepts both forms.
 - **Grading was moved.** The first plan was to grade on the machine that runs our validator. We ran the probe server and grader on the control machine instead, as a standalone server from the same pinned image.
 - **One continuation average was corrected.** An early figure for M1 (0.67) included one incomplete summary that had been probed before the "scorable only" rule was applied. The published figure (0.73 on 6 summaries) counts only complete summaries, the same rule as for every other contestant.
 

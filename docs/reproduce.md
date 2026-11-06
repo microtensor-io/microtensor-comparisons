@@ -11,7 +11,7 @@ All commands run from the root of this repository.
 | Rebuilding the items (steps 1, 2) | Python 3.11, git |
 | Regrading (step 4) | Docker, 4 CPU cores, about 4 GB of disk |
 | Rerunning the local models (step 3) | Docker with one NVIDIA GPU of 24 GB (we used an RTX 4090), about 30 GB of disk, a Hugging Face account with access to the three archived models |
-| Rerunning the frontier contestants, reader and judge (step 5) | An API key for an OpenAI compatible chat API that serves the models |
+| Rerunning the larger open models, reader and judge (step 5) | Docker with one NVIDIA GPU of 48 GB per model (we rented A40 cards), about 30 GB of disk per model |
 | Analysis (step 6) | Python 3.11 |
 
 ## 1. Install
@@ -133,35 +133,63 @@ By default the probe model is only asked about summaries that can score (all nin
 
 To check our grades without rerunning any model, run this step on the outputs already in the repository and compare the new `graded` files with ours.
 
-## 5. Frontier contestants, reader and judge
+## 5. Larger open models, reader and judge
 
-These go through any OpenAI compatible chat API. The model names in `comparisons/prompts.py` map to provider model ids (`LIST_PRICES`); change them there if your provider names them differently.
+These go through an OpenAI compatible chat API. We served the two open models with llama.cpp on one 48 GB card each. The model names in `comparisons/prompts.py` (`OPEN_MODELS`) map to the model files.
+
+Start a server per model. On your own 48 GB card:
 
 ```bash
-export OPENROUTER_API_KEY=...        # or use --key-env and --endpoint for another provider
+docker run -d --gpus all -p 8000:8000 \
+  ghcr.io/ggml-org/llama.cpp@sha256:821d0ae4e5d4e82a2ad8d08973b5f9cd5d0b84524b1d2439ed1f3e41ebc6b4c7 \
+  -hf unsloth/Qwen3.8-27B-GGUF:UD-Q6_K_XL --no-mmproj --host 0.0.0.0 --port 8000 \
+  --alias qwen-3-8-27b --api-key "$OPEN_POD_KEY" -c 131072 -np 1 -ngl 999 -fa on \
+  --jinja --reasoning-budget 0 --cache-reuse 256
+```
 
+For Gemma use `-hf unsloth/gemma-4-31B-it-GGUF:UD-Q5_K_XL --alias gemma-4-31b`, and `-c 139264` if you want the one session that is 131,921 tokens in its tokenizer. `tools/open_pod.py up --name NAME --model qwen-3-8-27b` starts the same server on a rented pod and prints its endpoint; it reads `RUNPOD_API_KEY` from the environment.
+
+Summaries (F1, F2 and P1), one request at a time so the timings mean something:
+
+```bash
 python -m comparisons.jobs summaries --pi sources/pi-package/package
-python -m comparisons.run jobs --jobs ctx_compress/exp1/results/work/summaries.jobs.jsonl
+python -m comparisons.run jobs --stream --workers 1 --only qwen-3-8-27b \
+  --endpoint http://QWEN_HOST:8000/v1 --key-env OPEN_POD_KEY \
+  --jobs ctx_compress/exp1/results/work/summaries.jobs.jsonl
+python -m comparisons.run jobs --stream --workers 1 --only gemma-4-31b \
+  --endpoint http://GEMMA_HOST:8000/v1 --key-env OPEN_POD_KEY \
+  --jobs ctx_compress/exp1/results/work/summaries.jobs.jsonl
 python -m comparisons.jobs collect
 ```
 
 `--pi` points at the extracted Pi package (`npm pack @earendil-works/pi-coding-agent@1.1.0`, then extract the archive into `sources/pi-package`). It is only read for the two prompt strings used by contestant P1, which we also saved in `results/work/pi_prompt.json`.
 
-Grade the four new contestants as in step 4 (`... -m comparisons.grade F1 F2 F3 P1`), then run the study's probes and the judge:
+`collect` writes `results/work/outputs/F1.jsonl`, `F2.jsonl` and `P1.jsonl`. A call counts as cleanly timed when the server processed the whole prompt in the attempt that finished. Otherwise its time is the measured generation time plus prompt time fitted on the clean rows of the same model.
+
+Grade the three new contestants as in step 4 (`... -m comparisons.grade F1 F2 P1`), then run the study's probes and the judge:
 
 ```bash
 python -m comparisons.jobs reader --package sources/compaction-study-replication
-python -m comparisons.run jobs --jobs ctx_compress/exp1/results/work/reader.jobs.jsonl --workers 8
+python -m comparisons.run jobs --stream --workers 4 \
+  --endpoint http://QWEN_HOST:8000/v1 --key-env OPEN_POD_KEY \
+  --jobs ctx_compress/exp1/results/work/reader.jobs.jsonl
 
 python -m comparisons.jobs judge --package sources/compaction-study-replication
-python -m comparisons.run jobs --jobs ctx_compress/exp1/results/work/judge.jobs.jsonl
+python -m comparisons.run jobs --stream --only gemma-4-31b \
+  --endpoint http://GEMMA_HOST:8000/v1 --key-env OPEN_POD_KEY \
+  --jobs ctx_compress/exp1/results/work/judge.jobs.jsonl
+python -m comparisons.run jobs --stream --only qwen-3-8-27b \
+  --endpoint http://QWEN_HOST:8000/v1 --key-env OPEN_POD_KEY \
+  --jobs ctx_compress/exp1/results/work/judge.jobs.jsonl
 ```
 
-The reader step needs the summaries of all eight summarising contestants. It asks one question per call: 360 planted fact and lure questions and 27 commitment probes for each of the ten contestants. The judge step packs the commitment replies in a shuffled order with no contestant names, asks for three votes each, and sends a random quarter to a second judge.
+The reader step needs the summaries of all seven summarising contestants. It asks one question per call: 360 planted fact and lure questions and 27 commitment probes for each of the nine contestants, 3,483 calls. A server started with `-np 4 -c 49152` answers the summary based questions four at a time; the full session questions (contestant C1) need the 131,072 token server. `--contestants` and `--tag` on `comparisons.jobs reader` build the jobs for some contestants only, which is how we spread them over several servers.
 
-Expected cost at list prices is about 95 USD in total, most of it the reader on the full sessions (contestant C1).
+The judge step packs the commitment replies in a shuffled order with no contestant names, asks Gemma for one vote each, and sends a random quarter to Qwen as a second judge.
 
-We have not run this step yet, so it is the least tested part of the repository.
+On one card per model, expect about two hours for each set of 36 summaries, three hours for the reader and half an hour for the judge. We rented up to twelve cards at once and spent about 12 USD.
+
+Outputs are deterministic for a given card and build. On other hardware the text can differ in places.
 
 ## 6. Analyse
 
@@ -173,4 +201,4 @@ python -m comparisons.charts
 
 `analyse` writes `raw.jsonl`, `summary.csv`, `tests.csv`, `chart.png`, `hand_check.md` and `analysis.json` into `ctx_compress/exp1/results/`. It works with whatever has been run so far and marks the rest as not run. `document` writes `comparison.json`, the document the Models page reads. `charts` draws the four charts in `results/charts/` from those files.
 
-With only the local models run, `summary.csv` must match the one in this repository.
+Run on the files in this repository, `summary.csv` and `tests.csv` must match the ones stored here.

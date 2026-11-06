@@ -19,15 +19,15 @@ Recall and hallucination are reported as the mean over all 36 summaries of a con
 
 ## Study metrics
 
-Computed from the fixed reader's answers. Not measured yet in exp1.
+Computed from the fixed reader's answers. In exp1 the reader is Qwen 3.8 27B with thinking off.
 
 | Metric | Definition |
 |---|---|
 | Planted fact recall | Correct answers divided by 306, scored by the study's own rules (`ceval/scoring.py` in the replication package). Also reported over the 273 facts the rendered session carries. |
 | Confident wrong | A wrong or outdated value given with no sign of doubt, or a lure answered as if it had been discussed, divided by the 360 questions. |
-| Commitment pass | The share of the 27 commitment probes where the reader's reply honours the earlier rule, by majority of three blind judge votes. |
+| Commitment pass | The share of the 27 commitment probes where the reader's reply honours the earlier rule, by the blind judge's votes (majority when there is more than one; exp1 used one vote from Gemma 4 31B). |
 | Confident commitment failure | The share where the reply breaks the rule and flags no doubt. |
-| Judge agreement | Cohen's kappa between the judge's majority and a second judge on a random 25% of replies. |
+| Judge agreement | Cohen's kappa between the judge's verdict and a second judge on a random 25% of replies. In exp1 the second judge is Qwen 3.8 27B and kappa is 0.51. |
 
 The reader sees only a context and one question. The context is the contestant's summary, the full rendered session for the ceiling, or its last 3,072 tokens for the floor. It has no tools and no session.
 
@@ -35,14 +35,14 @@ The reader sees only a context and one question. The context is the contestant's
 
 | Metric | Definition |
 |---|---|
-| Time | Median and 95th percentile of the total time of one compaction. For local models it is measured next to the engine on the GPU machine. For API models it is the provider's response time, and is labelled so. |
-| Time to first token | Median, local models only. |
+| Time | Median and 95th percentile of the total time of one compaction. For the four RTX 4090 models it is measured next to the engine on the GPU machine. For the open models on rented 48 GB cards it is the server's own prompt and generation time; 19 rows are timed at the client, and 21 Qwen rows whose stream resumed from the prompt cache use fitted prompt time. Each output row says which. |
+| Time to first token | Median. For the open models it is the server's prompt processing time. |
 | GPU cost per compaction | The card's hourly price times the measured time of the call. |
-| Cost per compaction | For Microtensor models, GPU cost plus the list price of 0.01 USD per million input tokens, with output tokens free. For API models, input and output tokens at the provider's list price. |
+| Cost per compaction | For Microtensor models, GPU cost plus the list price of 0.01 USD per million input tokens, with output tokens free. For the open models, GPU cost on the rented 48 GB card. |
 | Summary length | Output tokens. |
 
 ## Statistics
 
 - Wilson 95% intervals on every rate.
-- Paired exact McNemar tests, two sided, of M1 against each frontier contestant on pass (36 pairs), planted fact recall (306 pairs) and commitment pass (27 pairs).
-- A headline in the form "M1 keeps X of the frontier's recall at Y of the cost", where X is M1's recall divided by Claude Sonnet 5.5's and Y is the ratio of their costs per compaction.
+- Paired exact McNemar tests, two sided, on pass (36 pairs), planted fact recall (306 pairs) and commitment pass (27 pairs): M1 against F1, F2, P1 and B0, and F1 against P1.
+- The site's headline tiles: quality kept is the best Microtensor pass rate divided by the best larger model's, cost is the ratio of their costs per compaction, and speed is the ratio of their median times.
