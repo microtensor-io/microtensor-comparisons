@@ -1,0 +1,287 @@
+{
+ "experiment": "exp1",
+ "title": "Compaction models against frontier",
+ "run_date": "2026-11-06",
+ "public": true,
+ "status": "partial",
+ "dataset": {
+  "name": "Woolford compaction study replication package",
+  "url": "https://github.com/felixwoolford/compaction-study-replication",
+  "commit": "8c7c35f5d3222909c1ac8ef4bc44f90ba6a61512",
+  "licence": "MIT",
+  "sets": {
+   "A": "18 synthetic debugging sessions with 17 planted facts and 3 lures each",
+   "B": "18 real public Pi sessions with 27 scored commitment probes"
+  },
+  "items": 36,
+  "dropped": {
+   "A": [],
+   "B": []
+  },
+  "input_tokens": {
+   "min": 38914,
+   "p50": 66490,
+   "p95": 90120,
+   "max": 109268
+  },
+  "planted_facts": {
+   "planted": 306,
+   "in_session": 273,
+   "by_source": {
+    "tool_output": {
+     "in_session": 99,
+     "planted": 99
+    },
+    "user": {
+     "in_session": 99,
+     "planted": 99
+    },
+    "superseded": {
+     "in_session": 33,
+     "planted": 33
+    },
+    "thinking": {
+     "in_session": 0,
+     "planted": 33
+    },
+    "assistant_text": {
+     "in_session": 42,
+     "planted": 42
+    }
+   },
+   "lures": 54
+  },
+  "commitments": {
+   "probes": 29,
+   "scored": 27,
+   "in_session": 29
+  },
+  "items_sha256": "c61e850fe00c50237a7be1e21e43f1c1acfa545e66ac66f693a56e41036a877a"
+ },
+ "settings": {
+  "prompt": "the arena's compaction instruction and the canonically rendered session",
+  "temperature": 0,
+  "max_output_tokens": 3072,
+  "pass_threshold": 0.6,
+  "engine": "vllm/vllm-openai@sha256:6ee133356d49ed24cee03dd0cda3d3980279a11c107ce3e752c89e76540f41c9",
+  "card": "NVIDIA GeForce RTX 4090",
+  "card_usd_per_hour": 0.89,
+  "probe": {
+   "model": "Qwen/Qwen2.5-1.5B-Instruct-GGUF",
+   "revision": "91cad51170dc346986eccefdc2dd33a9da36ead9",
+   "file": "qwen2.5-1.5b-instruct-q8_0.gguf"
+  },
+  "probe_image": "ghcr.io/ggml-org/llama.cpp@sha256:43b3988c22c00faae3d04a8f6e3eba41403dff7c5f5952490599f1bcbdc6f3c2",
+  "tokenizer": "ibm-granite/granite-4.0-h-micro@d5f01a3ea75f088947be3aae039f4ad52837dfde",
+  "reader": "claude-sonnet-5-5",
+  "judge": "claude-opus-5-5"
+ },
+ "contestants": [
+  {
+   "id": "M1",
+   "kind": "microtensor",
+   "label": "UID 2 model",
+   "runs_on": "4090",
+   "status": "summaries and grades done, no reader yet",
+   "metrics": {
+    "items": 36,
+    "graded_items": 36,
+    "passed": 5,
+    "pass_rate": 0.1388888888888889,
+    "pass_rate_lower": 0.06081725363115098,
+    "pass_rate_upper": 0.28659851280393195,
+    "recall": 0.4748777200563836,
+    "hallucination": 0.02915548589445512,
+    "continuation": 0.7305555555555555,
+    "continuation_items": 6,
+    "format_valid_rate": 0.16666666666666666,
+    "format_valid_items": 6,
+    "within_budget_rate": 0.8611111111111112,
+    "mean_item_score": 0.12024572222222224,
+    "median_time_s": 28.5103,
+    "p95_time_s": 30.474225,
+    "median_ttft_s": 3.4471,
+    "time_source": "measured on the RTX 4090 pod",
+    "cost_per_compaction_usd": 0.010932321782407406,
+    "gpu_cost_per_compaction_usd": 0.005932321782407408,
+    "cost_basis": "4090 time at the pod's hourly price plus the 0.005 USD selling price",
+    "mean_output_tokens": 2474.0833333333335,
+    "mean_input_tokens": 67444.83333333333
+   },
+   "uid": 2,
+   "hotkey": "5HEtPjhaCs859sdCjMG1a3TEZWFftKRs4VAYzCjnNUf82iDL",
+   "weights": "e7528c4970d1dd273da438528078d8f4c86d3b6651882e5183ccbbfee5b08b7f"
+  },
+  {
+   "id": "M2",
+   "kind": "microtensor",
+   "label": "UID 13 model",
+   "runs_on": "4090",
+   "status": "summaries and grades done, no reader yet",
+   "metrics": {
+    "items": 36,
+    "graded_items": 36,
+    "passed": 5,
+    "pass_rate": 0.1388888888888889,
+    "pass_rate_lower": 0.06081725363115098,
+    "pass_rate_upper": 0.28659851280393195,
+    "recall": 0.46256800534728815,
+    "hallucination": 0.018007445993342103,
+    "continuation": 0.6619047619047619,
+    "continuation_items": 7,
+    "format_valid_rate": 0.19444444444444445,
+    "format_valid_items": 7,
+    "within_budget_rate": 0.8333333333333334,
+    "mean_item_score": 0.13314580555555555,
+    "median_time_s": 28.631549999999997,
+    "p95_time_s": 30.676275000000004,
+    "median_ttft_s": 3.4466,
+    "time_source": "measured on the RTX 4090 pod",
+    "cost_per_compaction_usd": 0.011351809135802469,
+    "gpu_cost_per_compaction_usd": 0.00635180913580247,
+    "cost_basis": "4090 time at the pod's hourly price plus the 0.005 USD selling price",
+    "mean_output_tokens": 2679.722222222222,
+    "mean_input_tokens": 67444.83333333333
+   },
+   "uid": 13,
+   "hotkey": "5DfMHBFPnimZrQtfXa4owd6RRrgakSY68RA8Y2teja7qkNaj",
+   "weights": "b0bd36e4ffcbf6e55762df1ed07d662c8eca53591e172bf845001bdcd133ed03"
+  },
+  {
+   "id": "M3",
+   "kind": "microtensor",
+   "label": "UID 14 model",
+   "runs_on": "4090",
+   "status": "summaries and grades done, no reader yet",
+   "metrics": {
+    "items": 36,
+    "graded_items": 36,
+    "passed": 3,
+    "pass_rate": 0.08333333333333333,
+    "pass_rate_lower": 0.028748089271291792,
+    "pass_rate_upper": 0.21827010276918848,
+    "recall": 0.3259203619594486,
+    "hallucination": 0.030438898280895934,
+    "continuation": 0.5383333333333333,
+    "continuation_items": 20,
+    "format_valid_rate": 0.5555555555555556,
+    "format_valid_items": 20,
+    "within_budget_rate": 0.9444444444444444,
+    "mean_item_score": 0.2625693055555556,
+    "median_time_s": 13.555299999999999,
+    "p95_time_s": 30.074975,
+    "median_ttft_s": 3.4479499999999996,
+    "time_source": "measured on the RTX 4090 pod",
+    "cost_per_compaction_usd": 0.009384457268518519,
+    "gpu_cost_per_compaction_usd": 0.004384457268518518,
+    "cost_basis": "4090 time at the pod's hourly price plus the 0.005 USD selling price",
+    "mean_output_tokens": 1718.7777777777778,
+    "mean_input_tokens": 67444.83333333333
+   },
+   "uid": 14,
+   "hotkey": "5DewpgADz26vA9aWLQBEtyhGUhC7YGFMxzmTUENMGCd71RDd",
+   "weights": "84b5d274f769c3906c48f22a22aace7a77a9a3289653e8fbb56367aca4059d08"
+  },
+  {
+   "id": "B0",
+   "kind": "base",
+   "label": "Granite 4.0 H Micro base",
+   "runs_on": "4090",
+   "status": "summaries and grades done, no reader yet",
+   "metrics": {
+    "items": 36,
+    "graded_items": 36,
+    "passed": 0,
+    "pass_rate": 0.0,
+    "pass_rate_lower": 0.0,
+    "pass_rate_upper": 0.09642183044857634,
+    "recall": 0.2716815330495671,
+    "hallucination": 0.07337278449114312,
+    "continuation": 0.37916666666666665,
+    "continuation_items": 12,
+    "format_valid_rate": 0.3333333333333333,
+    "format_valid_items": 12,
+    "within_budget_rate": 0.9166666666666666,
+    "mean_item_score": 0.09188461111111111,
+    "median_time_s": 11.6294,
+    "p95_time_s": 28.35585,
+    "median_ttft_s": 3.45735,
+    "time_source": "measured on the RTX 4090 pod",
+    "cost_per_compaction_usd": 0.003449552785493827,
+    "gpu_cost_per_compaction_usd": 0.003449552785493827,
+    "cost_basis": "4090 time at the pod's hourly price",
+    "mean_output_tokens": 1262.7777777777778,
+    "mean_input_tokens": 67444.83333333333
+   },
+   "weights": "ibm-granite/granite-4.0-h-micro@d5f01a3ea75f088947be3aae039f4ad52837dfde"
+  },
+  {
+   "id": "F1",
+   "kind": "frontier",
+   "label": "Claude Haiku 5.5",
+   "runs_on": "relay",
+   "status": "0 of 36 summaries",
+   "metrics": {},
+   "model": "anthropic/claude-haiku-5.5"
+  },
+  {
+   "id": "F2",
+   "kind": "frontier",
+   "label": "GLM 5.3 Flash",
+   "runs_on": "relay",
+   "status": "0 of 36 summaries",
+   "metrics": {},
+   "model": "z-ai/glm-5.3-flash"
+  },
+  {
+   "id": "F3",
+   "kind": "frontier",
+   "label": "Claude Sonnet 5.5",
+   "runs_on": "relay",
+   "status": "0 of 36 summaries",
+   "metrics": {},
+   "model": "anthropic/claude-sonnet-5.5"
+  },
+  {
+   "id": "P1",
+   "kind": "baseline",
+   "label": "Claude Sonnet 5.5, Pi prompt",
+   "runs_on": "relay",
+   "status": "0 of 36 summaries",
+   "metrics": {},
+   "model": "anthropic/claude-sonnet-5.5"
+  },
+  {
+   "id": "C1",
+   "kind": "reference",
+   "label": "Ceiling: full cut",
+   "runs_on": "reader only",
+   "status": "waiting for the reader",
+   "metrics": {}
+  },
+  {
+   "id": "C0",
+   "kind": "reference",
+   "label": "Floor: last 3,072 tokens",
+   "runs_on": "reader only",
+   "status": "waiting for the reader",
+   "metrics": {}
+  }
+ ],
+ "tests": [],
+ "judge_agreement": {
+  "pairs": 0,
+  "kappa": null
+ },
+ "notes": [
+  "Continuation is measured on summaries that have all nine headings and fit the budget; the others score zero whatever it would be.",
+  "33 of the 306 planted facts sit only in the agent's thinking blocks, which the canonical rendering does not carry, so 273 is the most a contestant can recall.",
+  "Cost for the miner models is 4090 time at the pod's hourly price plus the 0.005 USD selling price; the base model is 4090 time only."
+ ],
+ "source": {
+  "repo": "microtensor-io/microtensor-comparisons",
+  "url": "https://github.com/microtensor-io/microtensor-comparisons",
+  "path": "ctx_compress/exp1",
+  "commit": ""
+ }
+}

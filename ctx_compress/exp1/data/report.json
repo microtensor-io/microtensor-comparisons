@@ -1,0 +1,69 @@
+{
+  "tokenizer": "ibm-granite/granite-4.0-h-micro@d5f01a3e",
+  "items": 36,
+  "by_set": {
+    "A": 18,
+    "B": 18
+  },
+  "dropped_over_cap_or_thin": {
+    "A": [],
+    "B": []
+  },
+  "input_tokens": {
+    "min": 38914,
+    "p50": 66490,
+    "p95": 90120,
+    "max": 109268
+  },
+  "facts": {
+    "planted": 306,
+    "in_session": 273,
+    "by_source": {
+      "tool_output": {
+        "in_session": 99,
+        "planted": 99
+      },
+      "user": {
+        "in_session": 99,
+        "planted": 99
+      },
+      "superseded": {
+        "in_session": 33,
+        "planted": 33
+      },
+      "thinking": {
+        "in_session": 0,
+        "planted": 33
+      },
+      "assistant_text": {
+        "in_session": 42,
+        "planted": 42
+      }
+    },
+    "lures": 54
+  },
+  "commitments": {
+    "probes": 29,
+    "scored": 27,
+    "in_session": 29
+  },
+  "arena_labels": {
+    "not_rendered": {
+      "facts": 8,
+      "probes": 1
+    },
+    "facts": {
+      "min": 7,
+      "p50": 13,
+      "p95": 19,
+      "max": 21
+    },
+    "probes": {
+      "min": 3,
+      "p50": 4,
+      "p95": 6,
+      "max": 6
+    }
+  },
+  "problems": []
+}

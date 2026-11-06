@@ -1,0 +1,22 @@
+{
+  "arena_id": "ctx_compress",
+  "seed": 1,
+  "counts": {
+    "slm": 36
+  },
+  "items": 36,
+  "blobs": 0,
+  "families": [
+    "economist-tui-sessions",
+    "pi-extensions-sessions",
+    "pi-for-excel-sessions",
+    "pi-mono-sessions",
+    "pi-web",
+    "s1-ci",
+    "s1-export",
+    "s1-leak",
+    "s1-migration",
+    "s1-rollback",
+    "s1-thumbs"
+  ]
+}
