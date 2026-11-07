@@ -15,7 +15,7 @@ mkdir -p /work /data /opt/system "$MT_WALLET_PATH"
 exec > >(tee -a /work/log.txt) 2>&1
 echo "==> $(date -u +%FT%TZ) bootstrap on $(hostname)"
 nvidia-smi --query-gpu=name,memory.total --format=csv,noheader
-(cd /work && python3 -m http.server 8080 --bind 0.0.0.0 >/dev/null 2>&1 &)
+(cd /work && python3 -m http.server 8081 --bind 0.0.0.0 >/dev/null 2>&1 &)
 (while true; do echo "$(date -u +%FT%TZ),$(nvidia-smi --query-gpu=memory.used,memory.total,utilization.gpu --format=csv,noheader,nounits)" >> /work/gpu.csv; sleep 5; done &)
 
 echo "==> packages"
