@@ -10,6 +10,7 @@ PIN="${MT_PIN:-}"
 LABEL="${MT_LABEL:-loadtest 4090}"
 WORKER="${MT_WORKER:-pod}"
 export MT_WALLET_PATH=/root/.bittensor/wallets
+export PYTHONUNBUFFERED=1
 
 mkdir -p /work /data /opt/system "$MT_WALLET_PATH"
 exec > >(tee -a /work/log.txt) 2>&1
@@ -38,11 +39,16 @@ curl -s http://127.0.0.1:8800/health; echo
 
 echo "==> wallet"
 python3 - <<'EOF'
+import os
 from bittensor_wallet import Wallet
 w = Wallet(name="loadtest", hotkey="default", path="/root/.bittensor/wallets")
 if not w.hotkey_file.exists_on_device():
     w.create_new_coldkey(n_words=12, use_password=False, overwrite=False, suppress=True)
-    w.create_new_hotkey(n_words=12, use_password=False, overwrite=False, suppress=True)
+    words = os.environ.get("MT_HOTKEY_MNEMONIC", "").strip()
+    if words:
+        w.regenerate_hotkey(mnemonic=words, use_password=False, overwrite=True, suppress=True)
+    else:
+        w.create_new_hotkey(n_words=12, use_password=False, overwrite=False, suppress=True)
 print("hotkey", w.hotkey.ss58_address)
 EOF
 
