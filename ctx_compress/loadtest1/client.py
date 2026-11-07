@@ -64,6 +64,9 @@ def one(http: httpx.Client, key: str, row: dict[str, Any], max_tokens: int) -> d
                         chunk = json.loads(payload)
                     except ValueError:
                         continue
+                    if chunk.get("error"):
+                        error = json.dumps(chunk["error"], ensure_ascii=False)[:300]
+                        continue
                     if not first:
                         first = time.perf_counter()
                     for choice in chunk.get("choices") or []:
@@ -79,6 +82,8 @@ def one(http: httpx.Client, key: str, row: dict[str, Any], max_tokens: int) -> d
     except httpx.HTTPError as exc:
         error = f"{type(exc).__name__}: {exc}"[:300]
     finished = time.perf_counter()
+    if status == 200 and not error and not text:
+        error = "the stream closed with no answer"
     return {
         "item_id": row["item_id"],
         "request_id": request_id,
@@ -231,6 +236,8 @@ def level(
                     row = order[cursor["n"] % len(order)]
                     cursor["n"] += 1
                 found = one(http, key, row, max_tokens)
+                if found["error"] or found["status"] != 200:
+                    time.sleep(1.0)
                 found["level"] = concurrency
                 found["worker"] = index
                 with lock:
