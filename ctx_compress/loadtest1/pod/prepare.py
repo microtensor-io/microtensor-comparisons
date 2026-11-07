@@ -56,12 +56,16 @@ def main() -> int:
         "slm_prompt": entry.get("slm_prompt", ""),
         "grader": entry.get("grader", ""),
         "envelope": entry.get("envelope") or {},
+        "route": entry.get("route", ""),
+        "max_output": entry.get("max_output", 0),
+        "stop": entry.get("stop") or [],
         "image_digest": "",
     }
     (ROOT / "build.json").write_text(json.dumps(build, indent=1, sort_keys=True), encoding="utf-8")
     print(
         f"prepared {build['model']} artifact {build['artifact_digest'][:12]} "
-        f"weights {build['weights_sha256'][:12]} max_model_len {build['max_model_len']}",
+        f"weights {build['weights_sha256'][:12]} max_model_len {build['max_model_len']} "
+        f"route {build['route']} max_output {build['max_output']}",
         flush=True,
     )
     return 0
