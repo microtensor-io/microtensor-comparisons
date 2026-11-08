@@ -1,0 +1,7 @@
+{
+ "gpu": "NVIDIA GeForce RTX 4090",
+ "cloud": "SECURE",
+ "usd_per_hour": 0.89,
+ "image": "vllm/vllm-openai@sha256:6ee133356d49ed24cee03dd0cda3d3980279a11c107ce3e752c89e76540f41c9",
+ "max_model_len": 125952
+}

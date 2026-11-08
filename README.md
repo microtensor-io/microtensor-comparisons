@@ -9,6 +9,7 @@ The live summary of each run is on the Models page of the site, under **Compare 
 | Arena | Run | Dataset | Status | Report |
 |---|---|---|---|---|
 | `ctx_compress` (agent session compaction) | exp1, 2026-11-06 | Woolford compaction study replication package | Complete, except the hand check. No closed API model. | [ctx_compress/exp1](ctx_compress/exp1/README.md) |
+| `ctx_compress` (agent session compaction) | exp2, 2026-11-08 | The same 36 sessions | Complete. The epoch 0 winner with a repair step that keeps all nine headings: 12 of 36 pass, against 5 without it. | [ctx_compress/exp2](ctx_compress/exp2/README.md) |
 
 ## What the first run found
 
