@@ -88,6 +88,7 @@ Paired exact McNemar tests on the arena pass, against exp1:
 | `results/work/pod_info.json`, `open_pod_info.json`, `grader_info.json`, `pod_log.txt` | Card, image, price, grader and the 4090 pod's log |
 | `results/raw.jsonl` | One row per contestant and item with the summary and every metric |
 | `results/summary.csv`, `results/analysis.json` | The table above, the repair counts and the rerun check |
+| `results/comparison.json` | The document on the Models page: exp1's document with R1 added as a contestant, its paired tests and a note |
 
 ## Rerun
 
