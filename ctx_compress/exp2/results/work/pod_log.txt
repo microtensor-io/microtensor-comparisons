@@ -1,0 +1,55 @@
+==> 2026-11-08T04:37:03Z exp2 boot on 4b09aa897ad4
+NVIDIA GeForce RTX 4090, 23028 MiB
+==> packages
+[notice] A new release of pip is available: 26.2.1 -> 26.3
+[notice] To update, run: python3.12 -m pip install --upgrade pip
+[notice] A new release of pip is available: 26.2.1 -> 26.3
+[notice] To update, run: python3.12 -m pip install --upgrade pip
+[notice] A new release of pip is available: 26.2.1 -> 26.3
+[notice] To update, run: python3.12 -m pip install --upgrade pip
+==> weights
+Fetching 27 files:   0%|          | 0/27 [00:00<?, ?it/s]Warning: You are sending unauthenticated requests to the HF Hub. Please set a HF_TOKEN to enable higher rate limits and faster downloads.
+Fetching 27 files:   4%|▎         | 1/27 [00:00<00:06,  4.33it/s]Fetching 27 files:  15%|█▍        | 4/27 [00:00<00:01, 13.32it/s]Fetching 27 files:  22%|██▏       | 6/27 [00:00<00:01, 14.01it/s]Fetching 27 files:  33%|███▎      | 9/27 [00:00<00:01, 15.73it/s]Fetching 27 files:  48%|████▊     | 13/27 [00:00<00:00, 18.00it/s]Fetching 27 files:  59%|█████▉    | 16/27 [00:00<00:00, 20.77it/s]Fetching 27 files:  70%|███████   | 19/27 [00:01<00:00, 20.15it/s]Fetching 27 files:  81%|████████▏ | 22/27 [00:01<00:00, 18.66it/s]Fetching 27 files:  93%|█████████▎| 25/27 [00:01<00:00, 18.92it/s]Fetching 27 files: 100%|██████████| 27/27 [00:01<00:00, 18.14it/s]Fetching 27 files: 100%|██████████| 27/27 [00:01<00:00, 17.32it/s]
+Fetching 32 files:   0%|          | 0/32 [00:00<?, ?it/s]Fetching 32 files:   3%|▎         | 1/32 [00:00<00:05,  5.25it/s]Fetching 32 files:  12%|█▎        | 4/32 [00:00<00:01, 15.00it/s]Fetching 32 files:  22%|██▏       | 7/32 [00:00<00:01, 12.86it/s]Fetching 32 files:  28%|██▊       | 9/32 [00:00<00:01, 12.07it/s]Fetching 32 files:  34%|███▍      | 11/32 [00:00<00:01, 11.52it/s]Fetching 32 files:  41%|████      | 13/32 [00:01<00:01, 10.50it/s]Fetching 32 files:  47%|████▋     | 15/32 [00:01<00:01, 10.36it/s]Fetching 32 files:  53%|█████▎    | 17/32 [00:01<00:01, 10.92it/s]Fetching 32 files:  59%|█████▉    | 19/32 [00:01<00:01, 10.64it/s]Fetching 32 files:  66%|██████▌   | 21/32 [00:01<00:01,  9.88it/s]Fetching 32 files:  72%|███████▏  | 23/32 [00:02<00:00, 10.07it/s]Fetching 32 files:  78%|███████▊  | 25/32 [00:02<00:00, 10.03it/s]Fetching 32 files:  84%|████████▍ | 27/32 [00:02<00:00, 10.16it/s]Fetching 32 files:  91%|█████████ | 29/32 [00:02<00:00, 10.19it/s]Fetching 32 files:  97%|█████████▋| 31/32 [00:09<00:01,  1.04s/it]Fetching 32 files: 100%|██████████| 32/32 [00:14<00:00,  1.77s/it]Fetching 32 files: 100%|██████████| 32/32 [00:14<00:00,  2.22it/s]
+weights e7528c4970d1dd273da438528078d8f4c86d3b6651882e5183ccbbfee5b08b7f
+weights match the epoch 0 winner
+==> engine
+{"object":"list","data":[{"id":"slm","object":"model","created":1794112817,"owned_by":"vllm","root":"/model","parent":null,"max_model_len":125952,"permission":[{"id":"modelperm-802e7d70f18ee354","obje
+==> run
+1 exp1-a-s1-s000 1437 16122.4
+2 exp1-a-s1-s001 3072 32064.5
+3 exp1-a-s1-s002 2383 25751.4
+4 exp1-a-s1-s003 3072 32678.8
+5 exp1-a-s1-s004 1236 14844.1
+6 exp1-a-s1-s005 3072 31603.7
+7 exp1-a-s1-s006 3072 32875.7
+8 exp1-a-s1-s007 3072 31941.3
+9 exp1-a-s1-s008 3072 31773.3
+10 exp1-a-s1-s009 3072 31891.7
+11 exp1-a-s1-s010 3072 32310.6
+12 exp1-a-s1-s011 3072 32601.9
+13 exp1-a-s1-s012 2187 24229.1
+14 exp1-a-s1-s013 3072 31563.1
+15 exp1-a-s1-s014 3072 31559.3
+16 exp1-a-s1-s015 3072 32273.0
+17 exp1-a-s1-s016 2011 22502.4
+18 exp1-a-s1-s017 3072 32065.0
+19 exp1-b-006b76a0bd 738 9151.6
+20 exp1-b-0524f79bcc 3072 32099.8
+21 exp1-b-07f364d652 3072 32521.3
+22 exp1-b-2c6f7071cf 3072 32275.4
+23 exp1-b-41741dcc2b 3072 34375.1
+24 exp1-b-43ceb7fafd 3072 32957.1
+25 exp1-b-4f0d38ac56 3072 34184.1
+26 exp1-b-8919a786f0 275 9257.8
+27 exp1-b-9bc982a9c0 522 7623.1
+28 exp1-b-9c47a696fb 3072 34835.2
+29 exp1-b-9d27998920 285 4629.4
+30 exp1-b-a5ce2d8ed7 3072 32414.4
+31 exp1-b-b83b3853fc 792 11480.9
+32 exp1-b-bb169ee8ea 3072 33715.8
+33 exp1-b-be809a9c47 3072 33366.8
+34 exp1-b-ca8d02f834 3072 33463.0
+35 exp1-b-cbc6fdc2b2 401 7968.5
+36 exp1-b-f783f8f727 3072 33003.9
+==> done 2026-11-08T04:56:27Z

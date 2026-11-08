@@ -178,7 +178,7 @@ def floor_text(text: str, tokenizer: Any) -> str:
 
 def wanted(args: argparse.Namespace) -> list[str]:
     named = [name for name in str(args.contestants or "").split(",") if name]
-    return [name for name in prompts.CONTESTANTS if not named or name in named]
+    return named or list(prompts.CONTESTANTS)
 
 
 def contexts(
@@ -191,8 +191,8 @@ def contexts(
         build.TOKENIZER, revision=build.TOKENIZER_REVISION
     )
     found: dict[tuple[str, str], str] = {}
-    for contestant in prompts.SUMMARISERS:
-        if contestant not in names:
+    for contestant in names:
+        if contestant in prompts.REFERENCES:
             continue
         rows = {
             row["item_id"]: row
