@@ -1,0 +1,60 @@
+5DewpgADz2 drew 40, same draw as the coordinator: True, rebuilt from public inputs: 12 of 12
+5FJC3RQ74Z drew 40, same draw as the coordinator: True, rebuilt from public inputs: 18 of 18
+5HEtPjhaCs drew 40, same draw as the coordinator: True, rebuilt from public inputs: 8 of 8
+5DfMHBFPni drew 40, same draw as the coordinator: True, rebuilt from public inputs: 11 of 11
+plan written: 49 calls to rerun across 4 miners
+Warning: You are sending unauthenticated requests to the HF Hub. Please set a HF_TOKEN to enable higher rate limits and faster downloads.
+A9Labs/mt_slm_ctx_compress downloaded and checked in 70 s
+ctx_compress-h95648edb-slm-0010 #0 match 350 tokens 17.57 s
+ctx_compress-h95648edb-slm-0018 #0 match 343 tokens 17.67 s
+ctx_compress-h95648edb-slm-0023 #0 match 405 tokens 16.59 s
+ctx_compress-h95648edb-slm-0024 #0 match 348 tokens 12.82 s
+ctx_compress-h95648edb-slm-0008-twin #0 match 390 tokens 14.15 s
+ctx_compress-h95648edb-slm-0013-twin #0 match 381 tokens 10.67 s
+ctx_compress-h95648edb-slm-0015-twin #0 match 366 tokens 11.63 s
+ctx_compress-h95648edb-slm-0023-twin #0 match 411 tokens 11.49 s
+ctx_compress-h95648edb-harness-0000 #0 match 372 tokens 16.26 s
+ctx_compress-h95648edb-harness-0012 #0 match 351 tokens 12.39 s
+ctx_compress-h95648edb-harness-0014 #0 match 354 tokens 14.36 s
+ctx_compress-h95648edb-harness-0024 #0 match 370 tokens 12.34 s
+Tang-yin-112/mt_slm_ctx_compress downloaded and checked in 94 s
+ctx_compress-h95648edb-slm-0000 #0 match 3072 tokens 68.73 s
+ctx_compress-h95648edb-slm-0008 #0 match 624 tokens 24.04 s
+ctx_compress-h95648edb-slm-0009 #0 match 3072 tokens 70.11 s
+ctx_compress-h95648edb-slm-0014 #0 match 3072 tokens 70.63 s
+ctx_compress-h95648edb-slm-0018 #0 match 888 tokens 28.16 s
+ctx_compress-h95648edb-slm-0024 #0 match 570 tokens 16.9 s
+ctx_compress-h95648edb-slm-0006-twin #0 match 613 tokens 15.51 s
+ctx_compress-h95648edb-slm-0008-twin #0 match 834 tokens 22.54 s
+ctx_compress-h95648edb-slm-0013-twin #0 match 702 tokens 16.79 s
+ctx_compress-h95648edb-harness-0002 #0 match 910 tokens 26.34 s
+ctx_compress-h95648edb-harness-0006 #0 match 3072 tokens 70.91 s
+ctx_compress-h95648edb-harness-0008 #0 match 3072 tokens 68.22 s
+ctx_compress-h95648edb-harness-0009 #0 match 3072 tokens 74.33 s
+ctx_compress-h95648edb-harness-0011 #0 match 1089 tokens 27.21 s
+ctx_compress-h95648edb-harness-0012 #0 match 3072 tokens 61.61 s
+ctx_compress-h95648edb-harness-0016 #0 match 751 tokens 22.34 s
+ctx_compress-h95648edb-harness-0021 #0 match 3072 tokens 72.83 s
+ctx_compress-h95648edb-harness-0022 #0 match 651 tokens 19.05 s
+Samonte/mt_slm_ctx_compress downloaded and checked in 142 s
+ctx_compress-h95648edb-slm-0017 #0 match 697 tokens 22.46 s
+ctx_compress-h95648edb-slm-0018 #0 match 700 tokens 24.43 s
+ctx_compress-h95648edb-slm-0000-twin #0 match 696 tokens 18.56 s
+ctx_compress-h95648edb-slm-0011-twin #0 match 605 tokens 16.49 s
+ctx_compress-h95648edb-slm-0022-twin #0 match 604 tokens 15.34 s
+ctx_compress-h95648edb-harness-0008 #0 match 706 tokens 23.85 s
+ctx_compress-h95648edb-harness-0011 #0 match 692 tokens 19.99 s
+ctx_compress-h95648edb-harness-0016 #0 match 753 tokens 22.2 s
+Daniel01410/mt_slm_ctx_compress downloaded and checked in 143 s
+ctx_compress-h95648edb-slm-0007 #0 match 626 tokens 19.55 s
+ctx_compress-h95648edb-slm-0008 #0 match 757 tokens 26.4 s
+ctx_compress-h95648edb-slm-0014 #0 match 742 tokens 26.43 s
+ctx_compress-h95648edb-slm-0016 #0 match 743 tokens 19.28 s
+ctx_compress-h95648edb-slm-0017 #0 match 715 tokens 22.9 s
+ctx_compress-h95648edb-slm-0021 #0 match 790 tokens 27.61 s
+ctx_compress-h95648edb-slm-0023 #0 match 849 tokens 25.23 s
+ctx_compress-h95648edb-slm-0009-twin #0 match 623 tokens 19.02 s
+ctx_compress-h95648edb-slm-0012-twin #0 match 590 tokens 13.84 s
+ctx_compress-h95648edb-slm-0024-twin #0 match 585 tokens 14.34 s
+ctx_compress-h95648edb-harness-0019 #0 match 619 tokens 17.51 s
+49 of 49 matched on the first run, 49 of 49 after one rerun of each mismatch in 38.7 min on NVIDIA GeForce RTX 4090
