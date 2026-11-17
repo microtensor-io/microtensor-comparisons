@@ -32,7 +32,7 @@ Can a small compaction model be scored on CPU inside a sandbox of 4 CPU cores an
 Two experiments used these parts:
 
 - **Fresh sessions.** 168 sessions from 14 seeds (101 to 114), 12 per seed, each seed standing for one evaluation round.
-- **Same sessions.** One secret seed made 36 sessions (set B, whose first 16 are the fixed set A) and 16 more held back (set C). The untuned 1B and 16 copies of it were scored on these sets with the entry check, conversion and engine control of a scorer we built, and the arena grader with a fresh reader server for every evaluation.
+- **Same sessions.** One secret seed made 36 sessions (set B, whose first 16 are the fixed set A) and 16 more held back (set C). The untuned 1B and 16 copies of it were scored on these sets with the entry check, conversion and engine control of a scorer we built, and the arena grader with a fresh reader server for every evaluation. These runs did not apply a 4 GiB memory limit, and they graded after summarising rather than alongside it.
 
 ## Timing and memory
 
@@ -116,14 +116,14 @@ The untuned 1B was scored again and again on the same sessions, each time with a
 
 | Where | Runs | Result |
 |---|---|---|
-| EPYC 9575F and EPYC 4564P, 10 instances | 10 runs of set A, 2 of set B, 2 of set C, and repeats on the same instance | Byte identical summaries, identical grades and identical scores every time: 0.4532 on A, 0.5811 on B, 0.4531 on C |
+| EPYC 9575F and EPYC 4564P, 9 instances | 10 runs of set A, 2 of set B, 2 of set C, including a repeat on the same instance | Byte identical summaries, identical grades and identical scores every time: 0.4532 on A, 0.5811 on B, 0.4531 on C |
 | EPYC 7713, 2 instances, 65 s per session | 4 runs of set A | Every summary differs from the 9575F and 4564P ones. Sessions took about 60 s and 8 or 9 of 16 ran past the time limit. Scores 0.300, 0.347, 0.347 and 0.347 |
 | EPYC 9575F with only the AVX2 kernel, 2 instances | 2 runs of set A | Identical to each other (0.4458) and identical to the EPYC 7713 summaries on every session the 7713 finished: 8 of 8 at a 65 s limit, 11 of 11 at a 240 s limit |
 
 What this shows:
 
-- **The kernel decides the text.** llama.cpp's CPU image carries several kernels and picks one per CPU. The 9575F and 4564P get the same one; the 7713, which has no AVX-512, gets another, and every summary changes. Shipping only the AVX2 kernel makes every one of these CPUs run the same arithmetic. It costs speed: 31.9 s per session on the 9575F against 22.3 s.
-- **The clock decides the rest.** On two EPYC 7713 instances one session took 48.9 s on one and ran past the 63.5 s limit on the other, so the same file scored 0.300 once and 0.347 three times. A later run on one of them took 121 s per session, twice as long as before, and 5 sessions ran past even a 240 s limit. Wherever a session comes near the limit, the score depends on how busy the machine is.
+- **The kernel decides the text.** llama.cpp's CPU image carries several kernels and picks one per CPU. The 9575F and 4564P get the same one; the 7713, which has no AVX-512, gets another, and every summary changes. The 7713's lower scores come from its timeouts: on the sessions it finished, its text scored slightly higher. Shipping only the AVX2 kernel makes every one of these CPUs run the same arithmetic. It costs speed, 31.9 s per session on the 9575F against 22.3 s, and it changes the score itself: the same file scores 0.4458 on that kernel against 0.4532 on the default one.
+- **The clock decides the rest.** On the EPYC 7713 the text was identical from run to run, but timeouts were not. A session that took 48.9 to 49.2 s in three runs ran past the 63.5 s limit in a fourth, so the same file scored 0.300 once and 0.347 three times. A later run stalled early, and 5 sessions ran past even a 240 s limit while the rest ran at the usual speed. Wherever a slow moment can push a session past the limit, the score depends on the machine.
 - **Generation is stable.** The same seed gave byte identical sessions on all 15 instances and all three CPU models.
 
 ## Copies of one model on the same sessions
