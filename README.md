@@ -10,6 +10,7 @@ The live summary of each run is on the Models page of the site, under **Compare 
 |---|---|---|---|---|
 | `ctx_compress` (agent session compaction) | exp1, 2026-11-06 | Woolford compaction study replication package | Complete, except the hand check. No closed API model. | [ctx_compress/exp1](ctx_compress/exp1/README.md) |
 | `ctx_compress` (agent session compaction) | exp2, 2026-11-08 | The same 36 sessions | Complete. The epoch 0 winner with a repair step that keeps all nine headings: 12 of 36 pass, against 5 without it. | [ctx_compress/exp2](ctx_compress/exp2/README.md) |
+| `ctx_compress` (agent session compaction) | cpu_limits, 2026-11-17 | Sessions from the arena's public generator, and exp1's 18 real sessions | Complete. On 4 CPU cores, 15 to 21 short sessions fit in 10 minutes, but fresh sessions move the score by about 15%, 15 times a 1% lead. | [ctx_compress/cpu_limits](ctx_compress/cpu_limits/README.md) |
 
 ## What the first run found
 
