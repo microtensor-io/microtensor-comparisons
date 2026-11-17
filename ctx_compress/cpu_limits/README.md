@@ -156,7 +156,6 @@ These two runs used a GPU to save time, with the same model file and engine buil
 |---|---|---|---|---|
 | 1B in chunks | 0.143 | 0 of 18 | 12 of 18 | 18.3% |
 | 1B in one call | 0.000 | 0 of 18 | 0 of 18 | 19.7% |
-| UID 2 (fine tuned 3B, epoch 0 winner) | 0.036 | 1 of 18 | 1 of 18 | 35.6% |
 | UID 14 (fine tuned 3B) | 0.300 | 2 of 18 | 11 of 18 | 37.1% |
 | Granite 4.0 H Micro (base 3B) | 0.098 | 0 of 18 | 4 of 18 | 37.0% |
 | Qwen 3.8 27B | 0.526 | 8 of 18 | 18 of 18 | 77.2% |
@@ -164,7 +163,7 @@ These two runs used a GPU to save time, with the same model file and engine buil
 
 In plain terms:
 
-- Chunking lets the 1B keep the format, which it never does in one long call. That alone puts it above the epoch 0 winner, which loops on inputs this long.
+- Chunking lets the 1B keep the format, which it never does in one long call.
 - It recalls about half the key facts the 3B models do, passes no session, and is far behind the 27B and 31B models.
 
 Time on CPU: in chunks the 1B reads 86,573 tokens and writes 14,597 per session on average. At the speeds measured on the short sessions:
