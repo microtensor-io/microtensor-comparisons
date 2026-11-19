@@ -2,13 +2,13 @@
 
 Arena: `ctx_compress-granite` on Bittensor testnet, netuid 576, epoch 0 (2026-11-18 to 2026-11-19).
 
-**Status: settled 2026-11-19 13:27 UTC.** The chain incentive follows one chain epoch after the weights (commit reveal), and is added below when it lands. Every figure comes from the public results API (`https://api.microtensor.cloud/v2/...`), the testnet chain (`wss://test.finney.opentensor.ai:443`) and the subnet's own code at the commits named below.
+**Status: settled 2026-11-19 13:27 UTC; the chain has paid the settled split since block 8,479,704 (14:31 UTC).** Every figure comes from the public results API (`https://api.microtensor.cloud/v2/...`), the testnet chain (`wss://test.finney.opentensor.ai:443`) and the subnet's own code at the commits named below.
 
 ## Short answer
 
 - **Fail closed.** A miner with no spot check result scores 0 in the specialist model pool and the system pool, and its share goes to the miners that were checked. When no coordinator report arrives, the validator keeps the last settled weights and the epoch pays nothing new.
 - **Validator spot checks.** A validator ran its own spot check on a rented RTX 4090, the coordinator's card, for one miner of this epoch. It drew the same 40 calls as the coordinator, and all 40 matched, call by call, as the coordinator's did.
-- **Two pool payout.** The epoch settled with 60% of miner emission to the specialist model pool and 40% to the system pool, and nothing burned. Both entries were paid from both pools: UID 14 61.54% and UID 1 38.46%. The system pool's reference was measured before settlement: 50 of 50 frontier answers.
+- **Two pool payout.** The epoch settled with 60% of miner emission to the specialist model pool and 40% to the system pool, and nothing burned. Both entries were paid from both pools: UID 14 61.54% and UID 1 38.46%, and the chain's incentive matches it. The system pool's reference was measured before settlement: 50 of 50 frontier answers.
 - **Separate records.** `ctx_compress` epoch 0 stays archived with its own results, scores and payout ([testnet_576](../../testnet_576/README.md)). This arena has its own epoch 0 record.
 
 ## Terms
@@ -133,6 +133,7 @@ The settled ledger (`GET /v2/arenas/ctx_compress-granite/epochs/0/ledger`, compu
 - With two eligible entries per pool, the rank payout 40% and 25% renormalises to 61.54% and 38.46%.
 - Both entries were spot checked, and the quorum was the one reporting validator.
 - UID 16 set these weights at block 8,479,341 (`0.615384615` and `0.384615385`), and sends them again every chain epoch.
+- The chain's incentive matched them from block 8,479,704 (14:31 UTC), one chain epoch after the commit, as commit reveal delays it: UID 14 0.6154, UID 1 0.3846, UID 0 0.0. At block 8,479,663 (14:23 UTC) it was still the earlier split, 0.3692, 0.2308 and 0.4.
 - Earlier the same day, before the reference was remeasured, the same validator's weights were 36.92%, 23.08% and 40% burned: the specialist model pool paid and the system pool had no reference.
 
 ### Under the corrected rules
